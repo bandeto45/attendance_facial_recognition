@@ -389,7 +389,7 @@ await seedDemoData(db);
 │                                                              │
 │  a) Start Camera                                             │
 │     - Request camera permission                              │
-│     - Initialize cordova-plugin-camera-preview               │
+│     - Initialize camera via getUserMedia API                 │
 │     - Set camera resolution & facing mode                    │
 │                                                              │
 │  b) Load Face Recognition Models                            │
@@ -729,13 +729,13 @@ cd cordova
 cordova plugin list
 
 # Should show:
-# cordova-plugin-camera-preview 0.14.0
 # cordova-plugin-email-composer 0.10.1
 # cordova-plugin-file 8.1.3
 # cordova-plugin-keyboard 1.3.0
 # cordova-plugin-statusbar 4.0.0
 # cordova-plugin-vibration 3.1.1
 # cordova-sqlite-storage 7.0.0
+# cordova-sms-plugin (for SMS notifications)
 ```
 
 ---
@@ -869,9 +869,10 @@ adb install cordova/platforms/android/app/build/outputs/apk/debug/app-debug.apk
 
 ### Cordova Plugins
 
+> **Note on Camera**: This app uses the standard Web API `navigator.mediaDevices.getUserMedia()` for camera access instead of Cordova camera plugins. This provides better compatibility across platforms and leverages native browser capabilities.
+
 | Plugin | Version | Purpose | Source |
 |--------|---------|---------|--------|
-| **cordova-plugin-camera-preview** | 0.14.0 | Live camera feed for face detection | [GitHub](https://github.com/cordova-plugin-camera-preview/cordova-plugin-camera-preview) |
 | **cordova-sqlite-storage** | 7.0.0 | Native SQLite database | [GitHub](https://github.com/xpbrew/cordova-sqlite-storage) |
 | **cordova-plugin-file** | 8.1.3 | File system access | [GitHub](https://github.com/apache/cordova-plugin-file) |
 | **cordova-plugin-email-composer** | 0.10.1 | Email sharing | [GitHub](https://github.com/katzer/cordova-plugin-email-composer) |
@@ -884,6 +885,21 @@ adb install cordova/platforms/android/app/build/outputs/apk/debug/app-debug.apk
 cd cordova
 cordova plugin add cordova-sms-plugin
 # For Android: Adds SEND_SMS & READ_PHONE_STATE permissions
+```
+
+**Optional: Remove Unused Camera Plugin**
+
+If `cordova-plugin-camera-preview` is installed but not being used (app uses getUserMedia instead), you can remove it:
+
+```bash
+cd cordova
+cordova plugin remove cordova-plugin-camera-preview
+
+# This will:
+# - Remove the plugin from the project
+# - Free up ~2MB of space
+# - Simplify the build process
+# - Remove unnecessary camera permissions (CAMERA already covered by getUserMedia)
 ```
 
 ### NPM Libraries
@@ -1068,6 +1084,40 @@ async function startRecognitionLoop(videoElement, students, onMatch) {
   // Call onMatch when student recognized
 }
 ```
+
+#### `src/pages/camera.f7` - Camera Implementation
+```javascript
+// Camera access using Web API (getUserMedia)
+// No Cordova camera plugin required - uses standard browser API
+
+async function requestCameraPermission() {
+  // Request camera permission via:
+  // 1. cordova.plugins.permissions (Android) - native permission dialog
+  // 2. navigator.mediaDevices.getUserMedia (fallback) - browser permission
+  
+  const stream = await navigator.mediaDevices.getUserMedia({
+    video: { 
+      facingMode: 'user',      // Front camera
+      width: { ideal: 1280 },  // HD resolution
+      height: { ideal: 720 }
+    },
+    audio: false
+  });
+  
+  videoEl.srcObject = stream;  // Attach to <video> element
+  await videoEl.play();         // Start playback
+}
+
+// Camera is rendered in HTML5 <video> element
+// Face detection runs on video frames via canvas capture
+```
+
+**Why getUserMedia instead of cordova-plugin-camera-preview:**
+- ✅ Better cross-platform compatibility (Android, iOS, browser)
+- ✅ Native browser capabilities (hardware acceleration)
+- ✅ Simpler implementation (no native plugin dependencies)
+- ✅ Easier debugging (works in browser for development)
+- ✅ Future-proof (standard Web API, not Cordova-specific)
 
 #### `src/js/utils/notifications.js` - Notifications
 ```javascript
