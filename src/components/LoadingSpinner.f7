@@ -1,0 +1,21 @@
+<template>
+  ${isVisible ? `
+    <div class="loading-overlay">
+      <div class="spinner"></div>
+    </div>
+  ` : ''}
+</template>
+
+<script>
+/**
+ * LoadingSpinner - Full-screen loading indicator
+ * 
+ * Props:
+ * - isVisible (boolean): Show/hide spinner
+ */
+export default (props) => {
+  const { isVisible = false } = props;
+  
+  return $render;
+}
+</script>

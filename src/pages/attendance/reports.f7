@@ -1,0 +1,515 @@
+<template>
+  <div class="page" data-name="attendance-reports">
+    <!-- Navbar -->
+    <div class="navbar">
+      <div class="navbar-bg"></div>
+      <div class="navbar-inner">
+        <div class="left">
+          <a href="/attendance/records/" class="link back">
+            <i class="icon material-icons">arrow_back</i>
+            <span>Back</span>
+          </a>
+        </div>
+        <div class="title">Reports & Analytics</div>
+        <div class="right">
+          <a href="#" class="link" @click=${handleExportReport}>
+            <i class="icon material-icons">upload</i>
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <!-- Page Content -->
+    <div class="page-content">
+      <!-- Date Range Selector -->
+      <div class="block">
+        <div class="flex items-center gap-2">
+          <button class="button button-small ${period === 'daily' ? 'button-fill' : 'button-outline'}" @click=${() => setPeriod('daily')}>Daily</button>
+          <button class="button button-small ${period === 'weekly' ? 'button-fill' : 'button-outline'}" @click=${() => setPeriod('weekly')}>Weekly</button>
+          <button class="button button-small ${period === 'monthly' ? 'button-fill' : 'button-outline'}" @click=${() => setPeriod('monthly')}>Monthly</button>
+        </div>
+      </div>
+
+      <!-- Overall Statistics -->
+      <div class="block-title">Overall Statistics</div>
+      <div class="block">
+        <div class="grid grid-cols-2 gap-3 mb-3">
+          <${StatCard} value=${analytics.totalStudents} label="Total Students" />
+          <${StatCard} value="${analytics.avgAttendance}%" label="Avg Attendance" />
+        </div>
+        <div class="grid grid-cols-3 gap-3">
+          <${StatCard} value=${analytics.totalPresent} label="Total Present" />
+          <${StatCard} value=${analytics.totalLate} label="Total Late" />
+          <${StatCard} value=${analytics.totalAbsent} label="Total Absent" />
+        </div>
+      </div>
+
+      <!-- Attendance Trend Chart -->
+      <div class="block-title">Attendance Trend</div>
+      <div class="block">
+        <div class="card p-4">
+          <canvas id="attendanceChart" style="width: 100%; height: 200px;"></canvas>
+        </div>
+      </div>
+
+      <!-- Top Performers -->
+      <div class="block-title">Perfect Attendance (${perfectAttendance.length})</div>
+      <div class="block">
+        ${perfectAttendance.length === 0 ? $h`
+          <${EmptyState} 
+            icon="star" 
+            title="No Perfect Attendance"
+            message="No students with 100% attendance in this period"
+          />
+        ` : $h`
+          <div class="list list-strong inset">
+            <ul>
+              ${perfectAttendance.map(student => $h`
+                <li class="item-content">
+                  <div class="item-media">
+                    ${student.photo_path ? $h`
+                      <img src="${student.photo_path}" 
+                           style="width: 44px; height: 44px; border-radius: 50%; object-fit: cover;" 
+                           alt="${student.name}" />
+                    ` : $h`
+                      <div style="width: 44px; height: 44px; border-radius: 50%; background: var(--attendance-primary); display: flex; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: 18px;">
+                        ${student.name.charAt(0)}
+                      </div>
+                    `}
+                  </div>
+                  <div class="item-inner">
+                    <div class="item-title">
+                      ${student.name}
+                      <div class="item-footer">${student.course}</div>
+                    </div>
+                    <div class="item-after">
+                      <span class="badge badge-success">100%</span>
+                    </div>
+                  </div>
+                </li>
+              `)}
+            </ul>
+          </div>
+        `}
+      </div>
+
+      <!-- Students at Risk -->
+      <div class="block-title">Low Attendance Alert (${lowAttendance.length})</div>
+      <div class="block">
+        ${lowAttendance.length === 0 ? $h`
+          <div class="card p-4 text-center">
+            <i class="icon material-icons text-5xl color-success mb-3">verified</i>
+            <div class="text-base font-semibold">All students have good attendance</div>
+          </div>
+        ` : $h`
+          <div class="list list-strong inset">
+            <ul>
+              ${lowAttendance.map(student => $h`
+                <li class="item-content">
+                  <div class="item-media">
+                    ${student.photo_path ? $h`
+                      <img src="${student.photo_path}" 
+                           style="width: 44px; height: 44px; border-radius: 50%; object-fit: cover;" 
+                           alt="${student.name}" />
+                    ` : $h`
+                      <div style="width: 44px; height: 44px; border-radius: 50%; background: var(--attendance-error); display: flex; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: 18px;">
+                        ${student.name.charAt(0)}
+                      </div>
+                    `}
+                  </div>
+                  <div class="item-inner">
+                    <div class="item-title">
+                      ${student.name}
+                      <div class="item-footer">${student.course}</div>
+                    </div>
+                    <div class="item-after">
+                      <span class="badge badge-error">${student.attendance}%</span>
+                    </div>
+                  </div>
+                </li>
+              `)}
+            </ul>
+          </div>
+        `}
+      </div>
+
+      <!-- Course-wise Breakdown -->
+      <div class="block-title">Course-wise Attendance</div>
+      <div class="block">
+        <div class="list list-strong inset">
+          <ul>
+            ${courseStats.map(course => $h`
+              <li class="item-content">
+                <div class="item-inner">
+                  <div class="item-title">
+                    ${course.name}
+                    <div class="item-footer">${course.total} students</div>
+                  </div>
+                  <div class="item-after">
+                    <div class="text-lg font-semibold color-primary">${course.percentage}%</div>
+                  </div>
+                </div>
+              </li>
+            `)}
+          </ul>
+        </div>
+      </div>
+
+      <!-- Export Options -->
+      <div class="block">
+        <button class="button button-fill button-large w-full" @click="${handleGeneratePDF}">
+          <i class="icon material-icons mr-2">description</i>
+          Generate PDF Report
+        </button>
+      </div>
+    </div>
+
+    <!-- Bottom Toolbar -->
+    <${BottomToolbar} active-tab="attendance" />
+  </div>
+</template>
+
+<script>
+import BottomToolbar from '../../components/BottomToolbar.f7';
+import StatCard from '../../components/StatCard.f7';
+import EmptyState from '../../components/EmptyState.f7';
+import database from '../../js/utils/database.js';
+import exportManager from '../../js/utils/export.js';
+
+export default (props, { $f7, $onMounted, $update, $h }) => {
+  let period = 'daily';
+  let analytics = {
+    totalStudents: 0,
+    avgAttendance: 0,
+    totalPresent: 0,
+    totalLate: 0,
+    totalAbsent: 0
+  };
+  let perfectAttendance = [];
+  let lowAttendance = [];
+  let courseStats = [];
+  let chartData = [];
+
+  $onMounted(async () => {
+    await database.init();
+    await loadAnalytics();
+    renderChart();
+  });
+
+  async function loadAnalytics() {
+    try {
+      const students = await database.getAllStudents();
+      analytics.totalStudents = students.length;
+
+      // Get date range based on period
+      const dateRange = getDateRange(period);
+      const records = await database.getAttendanceByDateRange(dateRange.start, dateRange.end);
+
+      // Calculate statistics
+      analytics.totalPresent = records.filter(r => r.status === 'present').length;
+      analytics.totalLate = records.filter(r => r.status === 'late').length;
+      analytics.totalAbsent = analytics.totalStudents - analytics.totalPresent - analytics.totalLate;
+      
+      const totalDays = getDaysBetween(dateRange.start, dateRange.end);
+      const maxPossible = analytics.totalStudents * totalDays;
+      analytics.avgAttendance = maxPossible > 0 ? Math.round((analytics.totalPresent / maxPossible) * 100) : 0;
+
+      // Calculate per-student attendance
+      const studentAttendance = calculateStudentAttendance(students, records, totalDays);
+
+      // Perfect attendance (100%)
+      perfectAttendance = studentAttendance
+        .filter(s => s.percentage === 100)
+        .map(s => ({
+          name: `${s.first_name} ${s.last_name}`,
+          course: s.course,
+          photo: s.photo_blob
+        }));
+
+      // Low attendance (< 75%)
+      lowAttendance = studentAttendance
+        .filter(s => s.percentage < 75)
+        .map(s => ({
+          name: `${s.first_name} ${s.last_name}`,
+          course: s.course,
+          photo: s.photo_blob,
+          attendance: s.percentage
+        }));
+
+      // Course-wise breakdown
+      const courseMap = new Map();
+      studentAttendance.forEach(s => {
+        if (!courseMap.has(s.course)) {
+          courseMap.set(s.course, { total: 0, present: 0 });
+        }
+        const stats = courseMap.get(s.course);
+        stats.total++;
+        stats.present += s.daysPresent;
+      });
+
+      courseStats = Array.from(courseMap.entries()).map(([name, stats]) => ({
+        name,
+        total: stats.total,
+        percentage: Math.round((stats.present / (stats.total * totalDays)) * 100)
+      }));
+
+      $update();
+    } catch (error) {
+      console.error('Load analytics error:', error);
+    }
+  }
+
+  function calculateStudentAttendance(students, records, totalDays) {
+    return students.map(student => {
+      const studentRecords = records.filter(r => r.student_id === student.id);
+      const daysPresent = studentRecords.filter(r => r.status === 'present' || r.status === 'late').length;
+      const percentage = totalDays > 0 ? Math.round((daysPresent / totalDays) * 100) : 0;
+
+      return {
+        ...student,
+        daysPresent,
+        percentage
+      };
+    });
+  }
+
+  function getDateRange(period) {
+    const end = new Date();
+    let start = new Date();
+
+    switch (period) {
+      case 'daily':
+        start = new Date();
+        break;
+      case 'weekly':
+        start.setDate(start.getDate() - 7);
+        break;
+      case 'monthly':
+        start.setMonth(start.getMonth() - 1);
+        break;
+    }
+
+    return {
+      start: start.toISOString().split('T')[0],
+      end: end.toISOString().split('T')[0]
+    };
+  }
+
+  function getDaysBetween(start, end) {
+    const startDate = new Date(start);
+    const endDate = new Date(end);
+    const diff = endDate - startDate;
+    return Math.ceil(diff / (1000 * 60 * 60 * 24)) + 1;
+  }
+
+  function renderChart() {
+    // Placeholder for chart rendering
+    // In production, use Chart.js or similar library
+    const canvas = document.getElementById('attendanceChart');
+    if (canvas) {
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#4CAF50';
+      ctx.fillRect(10, 10, 50, 50);
+      ctx.fillText('Chart placeholder - integrate Chart.js', 70, 40);
+    }
+  }
+
+  const setPeriod = async (newPeriod) => {
+    period = newPeriod;
+    await loadAnalytics();
+    renderChart();
+  };
+
+  const handleExportReport = () => {
+    const actions = [
+      { 
+        text: 'Export to CSV', 
+        onClick: () => exportToCSV() 
+      },
+      { 
+        text: 'Print Report', 
+        onClick: () => exportToPDF() 
+      },
+      { 
+        text: 'Share via Email', 
+        onClick: () => emailReport() 
+      }
+    ];
+    $f7.actions.create({ buttons: [...actions, { text: 'Cancel', color: 'red' }] }).open();
+  };
+
+  const handleGeneratePDF = async () => {
+    try {
+      const data = {
+        period,
+        analytics,
+        perfectAttendance: perfectAttendance.map(s => ({
+          'Student Name': s.name,
+          'Course': s.course,
+          'Attendance': '100%'
+        })),
+        lowAttendance: lowAttendance.map(s => ({
+          'Student Name': s.name,
+          'Course': s.course,
+          'Attendance': `${s.attendance}%`
+        })),
+        courseStats: courseStats.map(c => ({
+          'Course': c.name,
+          'Total Students': c.total,
+          'Attendance Rate': `${c.percentage}%`
+        }))
+      };
+      
+      // Create formatted data for export
+      const reportData = [
+        { 'Metric': 'Total Students', 'Value': analytics.totalStudents },
+        { 'Metric': 'Average Attendance', 'Value': `${analytics.avgAttendance}%` },
+        { 'Metric': 'Total Present', 'Value': analytics.totalPresent },
+        { 'Metric': 'Total Late', 'Value': analytics.totalLate },
+        { 'Metric': 'Total Absent', 'Value': analytics.totalAbsent },
+        { 'Metric': 'Period', 'Value': period.toUpperCase() }
+      ];
+      
+      const result = await exportManager.exportToPDF(reportData, `attendance_report_${period}_${new Date().toISOString().split('T')[0]}.pdf`, {
+        title: `Attendance Report - ${period.charAt(0).toUpperCase() + period.slice(1)}`,
+        date: new Date().toLocaleDateString()
+      });
+
+      if (result.success) {
+        $f7.toast.create({ text: 'Print dialog opened', position: 'center', closeTimeout: 2000 }).open();
+      } else {
+        $f7.dialog.alert('Print functionality requires Cordova printer plugin', 'Print Not Available');
+      }
+    } catch (error) {
+      $f7.dialog.alert('Failed to generate PDF: ' + error.message, 'Error');
+    }
+  };
+
+  async function exportToCSV() {
+    try {
+      $f7.dialog.preloader('Exporting to CSV...');
+      
+      // Combine all analytics data
+      const reportData = [
+        // Summary stats
+        { 'Section': 'SUMMARY', 'Metric': 'Total Students', 'Value': analytics.totalStudents },
+        { 'Section': 'SUMMARY', 'Metric': 'Average Attendance', 'Value': `${analytics.avgAttendance}%` },
+        { 'Section': 'SUMMARY', 'Metric': 'Total Present', 'Value': analytics.totalPresent },
+        { 'Section': 'SUMMARY', 'Metric': 'Total Late', 'Value': analytics.totalLate },
+        { 'Section': 'SUMMARY', 'Metric': 'Total Absent', 'Value': analytics.totalAbsent },
+        { 'Section': '', 'Metric': '', 'Value': '' }, // Empty row
+        // Perfect attendance
+        { 'Section': 'PERFECT ATTENDANCE', 'Metric': 'Student Name', 'Value': 'Course' },
+        ...perfectAttendance.map(s => ({ 'Section': '', 'Metric': s.name, 'Value': s.course })),
+        { 'Section': '', 'Metric': '', 'Value': '' }, // Empty row
+        // Low attendance
+        { 'Section': 'LOW ATTENDANCE', 'Metric': 'Student Name', 'Value': 'Attendance %' },
+        ...lowAttendance.map(s => ({ 'Section': '', 'Metric': s.name, 'Value': `${s.attendance}%` })),
+        { 'Section': '', 'Metric': '', 'Value': '' }, // Empty row
+        // Course stats
+        { 'Section': 'COURSE-WISE', 'Metric': 'Course Name', 'Value': 'Attendance %' },
+        ...courseStats.map(c => ({ 'Section': '', 'Metric': `${c.name} (${c.total} students)`, 'Value': `${c.percentage}%` }))
+      ];
+      
+      const result = await exportManager.exportToCSV(reportData, `attendance_report_${period}_${new Date().toISOString().split('T')[0]}.csv`);
+      $f7.dialog.close();
+      
+      if (result.success) {
+        const message = result.shared 
+          ? 'Report shared successfully!' 
+          : `Report saved and opened!\n\nLocation: ${result.path || 'App storage'}`;
+        
+        $f7.toast.create({
+          text: message,
+          position: 'center',
+          closeTimeout: 3000
+        }).open();
+      } else {
+        $f7.dialog.alert(`Export failed: ${result.error}`, 'Export Error');
+      }
+    } catch (error) {
+      $f7.dialog.close();
+      $f7.dialog.alert('Failed to export: ' + error.message, 'Error');
+    }
+  }
+
+  async function exportToPDF() {
+    await handleGeneratePDF();
+  }
+
+  function emailReport() {
+    $f7.dialog.prompt('Enter email address:', 'Email Report', async (email) => {
+      try {
+        $f7.dialog.preloader('Preparing email...');
+        
+        // Create report data
+        const reportData = [
+          { 'Metric': 'Total Students', 'Value': analytics.totalStudents },
+          { 'Metric': 'Average Attendance', 'Value': `${analytics.avgAttendance}%` },
+          { 'Metric': 'Total Present', 'Value': analytics.totalPresent },
+          { 'Metric': 'Total Late', 'Value': analytics.totalLate },
+          { 'Metric': 'Total Absent', 'Value': analytics.totalAbsent }
+        ];
+        
+        // Export to CSV first
+        const exportResult = await exportManager.exportToCSV(reportData, `attendance_report_${period}_${new Date().toISOString().split('T')[0]}.csv`);
+        
+        $f7.dialog.close();
+        
+        if (exportResult.success) {
+          // Open email composer
+          if (window.cordova && window.cordova.plugins && window.cordova.plugins.email) {
+            window.cordova.plugins.email.open({
+              to: [email],
+              subject: `Attendance Report - ${period.toUpperCase()}`,
+              body: `Please find attached the attendance report for ${period}.\n\nSummary:\n- Total Students: ${analytics.totalStudents}\n- Average Attendance: ${analytics.avgAttendance}%\n- Present: ${analytics.totalPresent}\n- Late: ${analytics.totalLate}\n- Absent: ${analytics.totalAbsent}\n\nPerfect Attendance: ${perfectAttendance.length} students\nLow Attendance: ${lowAttendance.length} students`,
+              attachments: [exportResult.path],
+              isHtml: false
+            });
+            $f7.toast.create({ text: 'Email composer opened', position: 'center', closeTimeout: 2000 }).open();
+          } else {
+            $f7.dialog.alert('Email plugin not available. File saved to: ' + exportResult.path, 'Export Success');
+          }
+        } else {
+          $f7.dialog.alert(`Failed to prepare email: ${exportResult.error}`, 'Error');
+        }
+      } catch (error) {
+        $f7.dialog.close();
+        $f7.dialog.alert('Failed to send email: ' + error.message, 'Error');
+      }
+    });
+  }
+
+  return $render;
+}
+</script>
+
+<style scoped>
+.mr-2 {
+  margin-right: var(--space-2);
+}
+
+.mb-3 {
+  margin-bottom: var(--space-3);
+}
+
+.grid {
+  display: grid;
+}
+
+.grid-cols-2 {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.grid-cols-3 {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.gap-2 {
+  gap: var(--space-2);
+}
+
+.gap-3 {
+  gap: var(--space-3);
+}
+</style>

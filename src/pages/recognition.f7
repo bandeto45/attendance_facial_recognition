@@ -1,0 +1,309 @@
+<template>
+  <div class="page recognition-page" data-name="recognition">
+    <!-- Navbar -->
+    <div class="navbar">
+      <div class="navbar-bg"></div>
+      <div class="navbar-inner">
+        <div class="left">
+          <a href="#" class="link icon-only" @click=${handleLogout}>
+            <i class="icon material-icons">arrow_back</i>
+          </a>
+        </div>
+        <div class="title">Live Recognition</div>
+        <div class="right">
+          <a href="/settings/" class="link icon-only">
+            <i class="icon material-icons">settings</i>
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <!-- Camera Viewfinder -->
+    <div class="page-content">
+      <div class="recognition-actions-header">
+        <button class="icon-selection-btn ${manualMode === 'in' ? 'icon-selection-btn--active' : ''}" @click=${() => startManual('in')}>
+          <i class="icon material-icons icon-lg">login</i>
+          <span class="icon-label">Time In</span>
+        </button>
+        <button class="icon-selection-btn ${manualMode === 'out' ? 'icon-selection-btn--active' : ''}" @click=${() => startManual('out')}>
+          <i class="icon material-icons icon-lg">logout</i>
+          <span class="icon-label">Time Out</span>
+        </button>
+      </div>
+
+    </div>
+
+    <!-- Bottom Toolbar -->
+    <${BottomToolbar} active-tab="recognition" />
+  </div>
+</template>
+
+<script>
+import BottomToolbar from '../components/BottomToolbar.f7';
+import cameraManager from '../js/utils/camera.js';
+import faceDetection from '../js/utils/faceDetection.js';
+import db from '../js/utils/database.js';
+
+export default (props, { $f7, $on, $onMounted, $onBeforeUnmount, $update, $h }) => {
+  let isCordova = !!window.cordova;
+  let currentDate = '';
+  let currentTime = '';
+  let flashOn = false;
+  let recognitionStatus = '';
+  let recentAttendance = [];
+  let timeInterval = null;
+
+  let cameraStarted = false;
+  let manualMode = '';
+
+  let cameraReady = false;
+  let cameraError = '';
+  const lastSeenMap = new Map();
+  const CONFIDENCE_THRESHOLD = 0.6;
+  const DUP_WINDOW_MS = 30000; // 30s duplicate suppression
+  const showToast = (text, timeout = 2000) => {
+    $f7.toast.create({
+      text,
+      position: 'center',
+      closeTimeout: timeout,
+    }).open();
+  };
+
+
+  const updateTime = () => {
+    const now = new Date();
+    currentDate = now.toLocaleDateString('en-US', { 
+      weekday: 'short', 
+      month: 'short', 
+      day: 'numeric', 
+      year: 'numeric' 
+    });
+    currentTime = now.toLocaleTimeString('en-US', { 
+      hour: '2-digit', 
+      minute: '2-digit',
+      second: '2-digit'
+    });
+    $update();
+  };
+
+  const handleLogout = () => {
+    $f7.dialog.confirm('Are you sure you want to logout?', 'Logout', () => {
+      localStorage.removeItem('user');
+      $f7.views.main.router.navigate('/', { reloadCurrent: true });
+    });
+  };
+
+  const loadRecentAttendance = () => {
+    db.getTodayAttendance()
+      .then((rows) => {
+        recentAttendance = rows.map((r) => ({
+          name: `${r.first_name || ''} ${r.last_name || ''}`.trim() || r.student_id,
+          studentId: r.student_id,
+          time: r.time_in || r.time_out || '',
+          status: r.time_out ? 'out' : 'in',
+        }));
+        $update();
+      })
+      .catch((err) => {
+        console.error('Load attendance error:', err);
+      });
+  };
+
+  const handleRecognitionResult = async (match) => {
+    if (!match?.matched || !match.student) return;
+    const now = Date.now();
+    const last = lastSeenMap.get(match.student.id);
+    if (last && now - last < DUP_WINDOW_MS) return;
+    lastSeenMap.set(match.student.id, now);
+
+    try {
+      const attendancePhoto = await cameraManager.captureFrame();
+      const existing = await db.getTodayRecordForStudent(match.student.id);
+      let status = 'in';
+
+      if (manualMode === 'in') {
+        if (existing) {
+          showToast('Student already checked in today');
+          return;
+        }
+        const result = await db.recordTimeIn(match.student.id, match.confidence || 0, attendancePhoto);
+        if (result?.success === false) {
+          showToast(result.message || 'Unable to record time-in');
+          return;
+        }
+        status = 'in';
+      } else if (manualMode === 'out') {
+        if (!existing) {
+          showToast('No time-in found for today');
+          return;
+        }
+        if (existing.time_out) {
+          showToast('Student already checked out');
+          return;
+        }
+        await db.recordTimeOut(match.student.id, match.confidence || 0, attendancePhoto);
+        status = 'out';
+      } else {
+        if (!existing) {
+          await db.recordTimeIn(match.student.id, match.confidence || 0, attendancePhoto);
+          status = 'in';
+        } else if (!existing.time_out) {
+          await db.recordTimeOut(match.student.id, match.confidence || 0, attendancePhoto);
+          status = 'out';
+        } else {
+          await db.recordTimeIn(match.student.id, match.confidence || 0, attendancePhoto);
+          status = 'in';
+        }
+      }
+
+      const fullName = `${match.student.first_name || ''} ${match.student.last_name || ''}`.trim() || match.student.name || 'Student';
+      recognitionStatus = `${fullName} ${status === 'in' ? 'checked in' : 'checked out'}`;
+      recentAttendance = [
+        {
+          name: fullName,
+          studentId: match.student.student_id || match.student.id,
+          time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+          status: status,
+        },
+        ...recentAttendance,
+      ].slice(0, 10);
+      $update();
+    } catch (err) {
+      console.error('Record attendance error:', err);
+      cameraError = err?.message || 'Failed to record attendance';
+      $update();
+    }
+  };
+
+  const startManual = async (mode) => {
+    manualMode = mode;
+    recognitionStatus = '';
+    // Navigate to camera page with mode as path parameter
+    $f7.views.main.router.navigate(`/camera/${mode}/`);
+  };
+
+  $onMounted(async () => {
+    isCordova = !!window.cordova;
+    
+    // Check authentication
+    const user = localStorage.getItem('user');
+    if (!user) {
+      $f7.views.main.router.navigate('/', { reloadCurrent: true });
+      return;
+    }
+
+    // Wait for Cordova to be ready if in Cordova environment
+    if (window.cordova) {
+      if (!window.sqlitePlugin && !window.SQLitePlugin) {
+        console.log('Waiting for Cordova plugins to load...');
+        await new Promise((resolve) => {
+          document.addEventListener('deviceready', resolve, { once: true });
+        });
+        // Give extra time for plugins to fully initialize
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      }
+    }
+
+    updateTime();
+    timeInterval = setInterval(updateTime, 1000);
+    loadRecentAttendance();
+
+    // Camera will start when user taps Time In or Time Out
+  });
+
+  $onBeforeUnmount(() => {
+    if (timeInterval) {
+      clearInterval(timeInterval);
+    }
+  });
+
+  return $render;
+};
+</script>
+
+<style scoped>
+.navbar {
+  --f7-navbar-bg-color: var(--attendance-primary);
+  --f7-navbar-text-color: white;
+  --f7-navbar-link-color: white;
+}
+
+.navbar .material-icons {
+  color: white;
+}
+
+.no-padding {
+  padding: 0;
+}
+
+
+.recognition-actions-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+  padding: var(--space-4);
+  background: var(--attendance-bg);
+  border-bottom: 2px solid rgba(0, 0, 0, 0.08);
+  justify-content: center;
+}
+
+.icon-selection-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-4) var(--space-5);
+  border-radius: var(--radius-xl);
+  border: none;
+  background: rgba(76, 175, 80, 0.08);
+  color: var(--attendance-secondary);
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.icon-lg {
+  font-size: 48px;
+  display: block;
+}
+
+.icon-label {
+  font-size: var(--font-sm);
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+.icon-selection-btn:active {
+  transform: scale(0.95);
+}
+
+.icon-selection-btn:hover:not(.icon-selection-btn--active) {
+  background: rgba(76, 175, 80, 0.15);
+}
+
+.icon-selection-btn--active {
+  background: linear-gradient(135deg, var(--attendance-primary) 0%, rgba(76, 175, 80, 0.85) 100%);
+  color: white;
+  box-shadow: 0 8px 24px rgba(76, 175, 80, 0.35);
+}
+
+.icon-selection-btn--active:hover {
+  box-shadow: 0 10px 28px rgba(76, 175, 80, 0.45);
+  transform: translateY(-2px);
+}
+
+.icon-selection-btn--active .icon-lg {
+  animation: iconPulse 0.6s ease-out;
+}
+
+@keyframes iconPulse {
+  0% { transform: scale(0.8); opacity: 0; }
+  50% { transform: scale(1.1); }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+</style>

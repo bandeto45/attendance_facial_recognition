@@ -1,0 +1,24 @@
+<template>
+  <div class="stat-card">
+    <div class="stat-card__value">${value}</div>
+    <div class="stat-card__label">${label}</div>
+  </div>
+</template>
+
+<script>
+/**
+ * StatCard - Statistics display card
+ * 
+ * Props:
+ * - value (number|string): Stat value
+ * - label (string): Stat label
+ */
+export default (props) => {
+  const { 
+    value = 0,
+    label = 'Total'
+  } = props;
+  
+  return $render;
+}
+</script>

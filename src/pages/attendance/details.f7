@@ -1,0 +1,363 @@
+<template>
+  <div class="page" data-name="attendance-details">
+    <!-- Navbar -->
+    <div class="navbar">
+      <div class="navbar-bg"></div>
+      <div class="navbar-inner">
+        <div class="left">
+          <a href="/attendance/records/" class="link back">
+            <i class="icon material-icons">arrow_back</i>
+            <span>Back</span>
+          </a>
+        </div>
+        <div class="title">Attendance Details</div>
+        <div class="right">
+          <a href="#" class="link icon-only" @click=${handleEdit}>
+            <i class="icon material-icons">edit</i>
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <!-- Page Content -->
+    <div class="page-content">
+      ${loading ? $h`
+        <${LoadingSpinner} is-visible=${true} />
+      ` : record ? $h`
+        <!-- Student Info Card -->
+        <div class="block">
+          <div class="card card--elevated p-4">
+            <div class="flex items-center gap-4">
+              ${photoUrl ? $h`
+                <img src="${photoUrl}" 
+                     class="rounded-full" 
+                     style="width: 80px; height: 80px; object-fit: cover;" 
+                     alt="${record.name}"
+                     onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
+                <div class="rounded-full" style="width: 80px; height: 80px; background: linear-gradient(135deg, var(--attendance-primary), var(--attendance-secondary)); display: none; align-items: center; justify-content: center; color: white; font-size: 32px; font-weight: 600;">
+                  ${record.name.split(' ').map(n => n.charAt(0)).join('')}
+                </div>
+              ` : $h`
+                <div class="rounded-full" style="width: 80px; height: 80px; background: linear-gradient(135deg, var(--attendance-primary), var(--attendance-secondary)); display: flex; align-items: center; justify-content: center; color: white; font-size: 32px; font-weight: 600;">
+                  ${record.name.split(' ').map(n => n.charAt(0)).join('')}
+                </div>
+              `}
+              <div class="flex-1">
+                <div class="text-xl font-semibold color-primary">${record.name}</div>
+                <div class="text-sm color-secondary mt-1">ID: ${record.student_id}</div>
+                <div class="text-sm color-secondary">${record.course} • Year ${record.year_level}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Attendance Information -->
+        <div class="block-title">Attendance Information</div>
+        <div class="list list-strong inset">
+          <ul>
+            <li class="item-content">
+              <div class="item-inner">
+                <div class="item-title">
+                  <div class="item-header">Date</div>
+                  ${record.attendance_date}
+                </div>
+              </div>
+            </li>
+            <li class="item-content">
+              <div class="item-inner">
+                <div class="item-title">
+                  <div class="item-header">Time In</div>
+                  ${record.time_in || '-'}
+                </div>
+              </div>
+            </li>
+            <li class="item-content">
+              <div class="item-inner">
+                <div class="item-title">
+                  <div class="item-header">Time Out</div>
+                  ${record.time_out || '-'}
+                </div>
+              </div>
+            </li>
+            <li class="item-content">
+              <div class="item-inner">
+                <div class="item-title">
+                  <div class="item-header">Status</div>
+                  <span class="badge badge-${record.status === 'present' ? 'success' : record.status === 'late' ? 'warning' : 'error'}">
+                    ${record.status.toUpperCase()}
+                  </span>
+                </div>
+              </div>
+            </li>
+            <li class="item-content">
+              <div class="item-inner">
+                <div class="item-title">
+                  <div class="item-header">Confidence</div>
+                  ${Math.round(record.confidence * 100)}%
+                </div>
+              </div>
+            </li>
+            <li class="item-content">
+              <div class="item-inner">
+                <div class="item-title">
+                  <div class="item-header">Duration</div>
+                  ${calculateDuration(record.time_in, record.time_out)}
+                </div>
+              </div>
+            </li>
+          </ul>
+        </div>
+
+        <!-- Captured Photo -->
+        ${capturedPhotoUrl ? $h`
+          <div class="block-title">Captured Photo</div>
+          <div class="block">
+            <div class="card card--elevated p-4 text-center">
+              <img src="${capturedPhotoUrl}" 
+                   style="max-width: 100%; height: auto; border-radius: var(--radius-md); cursor: pointer;" 
+                   alt="Captured Photo" 
+                   @click=${() => viewPhoto(capturedPhotoUrl)} />
+              <div class="text-sm color-secondary mt-2">Tap to enlarge</div>
+            </div>
+          </div>
+        ` : ''}
+
+        <!-- Actions -->
+        <div class="block">
+          <div class="grid grid-cols-2 gap-3">
+            <button class="button button-fill" @click=${handlePrint}>
+              <i class="icon material-icons mr-2">print</i>
+              Print
+            </button>
+            <button class="button button-fill color-red" @click=${handleDelete}>
+              <i class="icon material-icons mr-2">delete</i>
+              Delete
+            </button>
+          </div>
+        </div>
+      ` : $h`
+        <${EmptyState} 
+          icon="error_outline" 
+          title="Record Not Found"
+          message="The attendance record could not be loaded"
+        />
+      `}
+    </div>
+  </div>
+</template>
+
+<script>
+import LoadingSpinner from '../../components/LoadingSpinner.f7';
+import EmptyState from '../../components/EmptyState.f7';
+import database from '../../js/utils/database.js';
+import fileStorage from '../../js/utils/fileStorage.js';
+
+export default (props, { $f7, $f7route, $onMounted, $update, $h }) => {
+  const recordId = $f7route.params.recordId;
+  let record = null;
+  let loading = true;
+  let photoUrl = null;
+  let capturedPhotoUrl = null;
+
+  $onMounted(async () => {
+    await loadRecord();
+  });
+
+  async function loadRecord() {
+    try {
+      loading = true;
+      $update();
+
+      // Query with JOIN to get student info
+      const result = await database.query(
+        `SELECT a.*, s.student_id, s.first_name, s.last_name, s.course, s.year_level, s.photo_path
+         FROM attendance a 
+         JOIN students s ON a.student_id = s.id 
+         WHERE a.id = ?`,
+        [recordId]
+      );
+
+      if (result && result.length > 0) {
+        const row = result[0];
+        record = {
+          id: row.id,
+          student_id: row.student_id,
+          name: `${row.first_name} ${row.last_name}`,
+          course: row.course,
+          year_level: row.year_level,
+          attendance_date: row.attendance_date,
+          time_in: row.time_in,
+          time_out: row.time_out,
+          status: row.status,
+          confidence: row.confidence
+        };
+
+        // Load student photo from file system
+        if (row.photo_path) {
+          try {
+            photoUrl = await fileStorage.loadPhoto(row.photo_path);
+            if (!photoUrl) {
+              console.warn('Failed to load student photo from path:', row.photo_path);
+            }
+          } catch (e) {
+            console.error('Student photo load error:', e);
+            photoUrl = null;
+          }
+        }
+
+        // Load captured attendance photo from file system (if different from student photo)
+        // Note: In your database, you might have a separate field for captured_photo_path
+        // For now, using the same photo_path
+        if (row.photo_path) {
+          try {
+            capturedPhotoUrl = await fileStorage.loadPhoto(row.photo_path);
+            if (!capturedPhotoUrl) {
+              console.warn('Failed to load captured photo from path:', row.photo_path);
+            }
+          } catch (e) {
+            console.error('Captured photo load error:', e);
+            capturedPhotoUrl = null;
+          }
+        }
+      }
+
+      loading = false;
+      $update();
+    } catch (error) {
+      console.error('Load attendance record error:', error);
+      loading = false;
+      $update();
+    }
+  }
+
+  function calculateDuration(timeIn, timeOut) {
+    if (!timeIn || !timeOut) return '-';
+
+    try {
+      const [inHours, inMinutes] = timeIn.split(':').map(Number);
+      const [outHours, outMinutes] = timeOut.split(':').map(Number);
+      
+      const inTotalMinutes = inHours * 60 + inMinutes;
+      const outTotalMinutes = outHours * 60 + outMinutes;
+      
+      const durationMinutes = outTotalMinutes - inTotalMinutes;
+      
+      const hours = Math.floor(durationMinutes / 60);
+      const minutes = durationMinutes % 60;
+      
+      return `${hours}h ${minutes}m`;
+    } catch (error) {
+      return '-';
+    }
+  }
+
+  const viewPhoto = (photoUrl) => {
+    const photos = [{ url: photoUrl }];
+    const photoBrowser = $f7.photoBrowser.create({
+      photos: photos,
+      type: 'standalone'
+    });
+    photoBrowser.open();
+  };
+
+  const handleEdit = () => {
+    $f7.dialog.prompt('Update Status:', 'Edit Attendance', (newStatus) => {
+      const statusOptions = ['present', 'late', 'absent'];
+      if (statusOptions.includes(newStatus.toLowerCase())) {
+        // Update in database
+        database.query(
+          'UPDATE attendance SET status = ? WHERE id = ?',
+          [newStatus.toLowerCase(), recordId]
+        ).then(() => {
+          record.status = newStatus.toLowerCase();
+          $update();
+          $f7.toast.create({ text: 'Status updated', position: 'center', closeTimeout: 2000 }).open();
+        });
+      }
+    }, null, record.status);
+  };
+
+  const handlePrint = () => {
+    // Use Cordova printer plugin if available
+    if (window.cordova && window.cordova.plugins && window.cordova.plugins.printer) {
+      const printContent = `
+        <h2>Attendance Record</h2>
+        <p><strong>Name:</strong> ${record.name}</p>
+        <p><strong>Student ID:</strong> ${record.student_id}</p>
+        <p><strong>Date:</strong> ${record.attendance_date}</p>
+        <p><strong>Time In:</strong> ${record.time_in}</p>
+        <p><strong>Time Out:</strong> ${record.time_out}</p>
+        <p><strong>Status:</strong> ${record.status.toUpperCase()}</p>
+      `;
+      
+      window.cordova.plugins.printer.print(printContent);
+    } else {
+      $f7.dialog.alert('Print functionality requires Cordova printer plugin', 'Print');
+    }
+  };
+
+  const handleDelete = () => {
+    $f7.dialog.confirm(
+      'Are you sure you want to delete this attendance record?',
+      'Delete Record',
+      async () => {
+        try {
+          await database.query('DELETE FROM attendance WHERE id = ?', [recordId]);
+          $f7.toast.create({ text: 'Record deleted', position: 'center', closeTimeout: 2000 }).open();
+          $f7.views.main.router.back();
+        } catch (error) {
+          $f7.dialog.alert('Failed to delete record', 'Error');
+        }
+      }
+    );
+  };
+
+  return $render;
+}
+</script>
+
+<style scoped>
+.mr-2 {
+  margin-right: var(--space-2);
+}
+
+.mt-1 {
+  margin-top: var(--space-1);
+}
+
+.mt-2 {
+  margin-top: var(--space-2);
+}
+
+.flex {
+  display: flex;
+}
+
+.flex-1 {
+  flex: 1;
+}
+
+.items-center {
+  align-items: center;
+}
+
+.gap-3 {
+  gap: var(--space-3);
+}
+
+.gap-4 {
+  gap: var(--space-4);
+}
+
+.grid {
+  display: grid;
+}
+
+.grid-cols-2 {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.rounded-full {
+  border-radius: 50%;
+}
+</style>

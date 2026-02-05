@@ -1,0 +1,32 @@
+<template>
+  <div class="attendance-feed-item">
+    <img src="${photo || 'https://via.placeholder.com/48'}" class="attendance-feed-item__photo" alt="${name}" />
+    <div class="attendance-feed-item__info">
+      <div class="attendance-feed-item__name">${name}</div>
+      <div class="attendance-feed-item__time">${time}</div>
+    </div>
+    <div class="attendance-feed-item__status ${status.toLowerCase()}">${status.toUpperCase()}</div>
+  </div>
+</template>
+
+<script>
+/**
+ * AttendanceCard - Display attendance record in feed
+ * 
+ * Props:
+ * - name (string): Student name
+ * - photo (string): Photo URL or base64
+ * - time (string): Time of attendance
+ * - status (string): 'IN' or 'OUT'
+ */
+export default (props) => {
+  const { 
+    name = 'Unknown',
+    photo = null,
+    time = '',
+    status = 'IN'
+  } = props;
+  
+  return $render;
+}
+</script>

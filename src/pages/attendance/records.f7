@@ -1,0 +1,545 @@
+<template>
+  <div class="page" data-name="attendance-records">
+    <!-- Navbar -->
+    <div class="navbar">
+      <div class="navbar-bg"></div>
+      <div class="navbar-inner">
+        <div class="left">
+          <a href="/recognition/" class="link icon-only">
+            <i class="icon material-icons">arrow_back</i>
+          </a>
+        </div>
+        <div class="title">Attendance Records</div>
+        <div class="right">
+          <a href="#" class="link" @click="${handleExport}">
+            <i class="icon material-icons">upload</i>
+          </a>
+          <a href="/attendance/reports/" class="link icon-only">
+            <i class="icon material-icons">bar_chart</i>
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <!-- Page Content -->
+    <div class="page-content">
+      <!-- Date Filter -->
+      <div class="block">
+        <div class="flex items-center justify-between gap-3">
+          <div class="flex-1">
+            <a href="#" class="button button-outline button-small" @click="${showDatePicker}">
+              <i class="icon material-icons">calendar</i>
+              <span class="ml-2">${selectedDate}</span>
+            </a>
+          </div>
+          <div>
+            <a href="#" class="button button-fill button-small" @click="${loadToday}">Today</a>
+          </div>
+        </div>
+      </div>
+
+      <!-- Statistics Cards -->
+      <div class="block">
+        <div class="grid grid-cols-3 gap-3">
+          <${StatCard} value="${stats.present}" label="Present" />
+          <${StatCard} value="${stats.late}" label="Late" />
+          <${StatCard} value="${stats.absent}" label="Absent" />
+        </div>
+      </div>
+
+      <!-- Filter Chips -->
+      <div class="block">
+        <div class="flex gap-2 flex-wrap">
+          <a href="#" class="chip ${filterStatus === 'all' ? 'chip-outline' : ''}" @click="${() => setFilter('all')}">
+            <div class="chip-label">All (${records.length})</div>
+          </a>
+          <a href="#" class="chip ${filterStatus === 'present' ? 'chip-outline' : ''}" @click="${() => setFilter('present')}">
+            <div class="chip-label">Present (${stats.present})</div>
+          </a>
+          <a href="#" class="chip ${filterStatus === 'late' ? 'chip-outline' : ''}" @click="${() => setFilter('late')}">
+            <div class="chip-label">Late (${stats.late})</div>
+          </a>
+        </div>
+      </div>
+
+      <!-- Attendance Records List -->
+      <div class="block-title">
+        ${filterStatus === 'all' ? 'All Records' : filterStatus.charAt(0).toUpperCase() + filterStatus.slice(1)} 
+        (${filteredRecords.length})
+      </div>
+      <div class="block">
+        ${filteredRecords.length === 0 ? $h`
+          <${EmptyState} 
+            icon="doc_text" 
+            title="No Records Found"
+            message="No attendance records for ${selectedDate}"
+          />
+        ` : filteredRecords.map(record => $h`
+          <div class="attendance-feed-item" @click=${() => viewDetails(record.id)}>
+            <div class="attendance-feed-item__photo-placeholder">
+              <i class="icon material-icons">person</i>
+            </div>
+            <div class="attendance-feed-item__info">
+              <div class="attendance-feed-item__name">${record.name}</div>
+              <div class="attendance-feed-item__time">
+                IN: ${record.time_in || '-'} | OUT: ${record.time_out || '-'}
+              </div>
+              <div class="text-xs color-secondary mt-1">${record.course}</div>
+            </div>
+            <div>
+              <div class="badge badge-${record.status === 'present' ? 'success' : record.status === 'late' ? 'warning' : 'error'}">
+                ${record.status.toUpperCase()}
+              </div>
+              ${record.confidence ? $h`<div class="text-xs color-secondary mt-1">${(record.confidence * 100).toFixed(0)}%</div>` : ''}
+            </div>
+          </div>
+        `)}
+      </div>
+
+      <!-- Load More -->
+      ${hasMore ? $h`
+        <div class="block text-center">
+          <a href="#" class="button button-outline" @click=${loadMore}>
+            <span>Load More</span>
+          </a>
+        </div>
+      ` : ''}
+    </div>
+
+    <!-- Bottom Toolbar -->
+    <${BottomToolbar} active-tab="attendance" />
+  </div>
+</template>
+
+<script>
+import BottomToolbar from '../../components/BottomToolbar.f7';
+import StatCard from '../../components/StatCard.f7';
+import EmptyState from '../../components/EmptyState.f7';
+import database from '../../js/utils/database.js';
+import exportManager from '../../js/utils/export.js';
+
+export default (props, { $f7, $on, $onMounted, $update, $store, $h }) => {
+  // State
+  let records = [];
+  let filteredRecords = [];
+  let selectedDate = new Date().toLocaleDateString();
+  let filterStatus = 'all';
+  let stats = { present: 0, late: 0, absent: 0 };
+  let hasMore = false;
+  let page = 1;
+  let pageSize = 20;
+
+  // Initialize
+  $onMounted(async () => {
+    await database.init();
+    await loadToday();
+  });
+
+  // Load today's attendance
+  async function loadToday() {
+    selectedDate = new Date().toLocaleDateString();
+    await loadAttendance(new Date().toISOString().split('T')[0]);
+  }
+
+  // Load attendance for specific date
+  async function loadAttendance(date) {
+    try {
+      $store.dispatch('setLoading', true);
+      
+      const dateStr = typeof date === 'string' ? date : date.toISOString().split('T')[0];
+      const endDate = dateStr;
+      
+      // Get attendance records (excluding large BLOB fields)
+      const result = await database.query(`
+        SELECT 
+          a.id, 
+          a.student_id, 
+          a.attendance_date,
+          a.time_in, 
+          a.time_out, 
+          a.status, 
+          a.confidence,
+          s.first_name, 
+          s.last_name, 
+          s.course,
+          s.student_id as sid
+        FROM attendance a
+        JOIN students s ON a.student_id = s.id
+        WHERE a.attendance_date = ?
+        ORDER BY a.time_in DESC
+      `, [dateStr]);
+      
+      records = result.map(r => ({
+        id: r.id,
+        name: `${r.first_name} ${r.last_name}`,
+        studentId: r.student_id,
+        course: r.course,
+        photo: null, // Exclude photo to avoid CursorWindow overflow
+        time_in: r.time_in,
+        time_out: r.time_out,
+        status: r.status,
+        confidence: r.confidence
+      }));
+
+      // Calculate statistics
+      stats.present = records.filter(r => r.status === 'present').length;
+      stats.late = records.filter(r => r.status === 'late').length;
+      
+      const allStudents = await database.getAllStudents();
+      const presentIds = records.map(r => r.studentId);
+      stats.absent = allStudents.filter(s => !presentIds.includes(s.id)).length;
+
+      // Apply filter
+      applyFilter();
+      
+      $store.dispatch('setLoading', false);
+      $update();
+    } catch (error) {
+      console.error('Load attendance error:', error);
+      $f7.dialog.alert('Failed to load attendance records', 'Error');
+      $store.dispatch('setLoading', false);
+    }
+  }
+
+  // Apply status filter
+  function applyFilter() {
+    if (filterStatus === 'all') {
+      filteredRecords = records;
+    } else {
+      filteredRecords = records.filter(r => r.status === filterStatus);
+    }
+  }
+
+  // Set filter
+  const setFilter = (status) => {
+    filterStatus = status;
+    applyFilter();
+    $update();
+  };
+
+  // Show date picker
+  const showDatePicker = () => {
+    const calendarModal = $f7.calendar.create({
+      inputEl: '#date-picker-input',
+      openIn: 'customModal',
+      header: true,
+      footer: true,
+      dateFormat: 'yyyy-mm-dd',
+      on: {
+        change: function(calendar, value) {
+          selectedDate = new Date(value[0]).toLocaleDateString();
+          loadAttendance(value[0]);
+          $update();
+        }
+      }
+    });
+    calendarModal.open();
+  };
+
+  // View record details
+  const viewDetails = (recordId) => {
+    $f7.views.main.router.navigate(`/attendance/details/${recordId}/`);
+  };
+
+  // Export records
+  const handleExport = () => {
+    const actions = [
+      {
+        text: 'Export to Excel',
+        onClick: async () => {
+          try {
+            $f7.dialog.preloader('Exporting to Excel...');
+            const formatted = records.map(r => ({
+              'Student ID': r.studentId,
+              'Name': r.name,
+              'Course': r.course,
+              'Date': selectedDate,
+              'Time In': r.time_in || '-',
+              'Time Out': r.time_out || '-',
+              'Status': r.status.toUpperCase(),
+              'Confidence': r.confidence ? `${(r.confidence * 100).toFixed(1)}%` : '-'
+            }));
+            
+            const result = await exportManager.exportToCSV(formatted, `attendance_${selectedDate.replace(/\//g, '-')}.csv`);
+            $f7.dialog.close();
+            
+            if (result.success) {
+              const message = result.shared 
+                ? 'File shared successfully!' 
+                : `File saved and opened!\n\nLocation: ${result.path || 'App storage'}`;
+              
+              $f7.toast.create({
+                text: message,
+                position: 'center',
+                closeTimeout: 3000
+              }).open();
+            } else {
+              $f7.dialog.alert(`Export failed: ${result.error}`, 'Export Error');
+            }
+          } catch (error) {
+            $f7.dialog.close();
+            $f7.dialog.alert('Failed to export: ' + error.message, 'Error');
+          }
+        }
+      },
+      {
+        text: 'Export to CSV',
+        onClick: async () => {
+          try {
+            $f7.dialog.preloader('Exporting to CSV...');
+            const formatted = records.map(r => ({
+              'Student ID': r.studentId,
+              'Name': r.name,
+              'Course': r.course,
+              'Date': selectedDate,
+              'Time In': r.time_in || '-',
+              'Time Out': r.time_out || '-',
+              'Status': r.status.toUpperCase(),
+              'Confidence': r.confidence ? `${(r.confidence * 100).toFixed(1)}%` : '-'
+            }));
+            
+            const result = await exportManager.exportToCSV(formatted, `attendance_${selectedDate.replace(/\//g, '-')}.csv`);
+            $f7.dialog.close();
+            
+            if (result.success) {
+              const message = result.shared 
+                ? 'File shared successfully!' 
+                : `File saved and opened!\n\nLocation: ${result.path || 'App storage'}`;
+              
+              $f7.toast.create({
+                text: message,
+                position: 'center',
+                closeTimeout: 3000
+              }).open();
+            } else {
+              $f7.dialog.alert(`Export failed: ${result.error}`, 'Export Error');
+            }
+          } catch (error) {
+            $f7.dialog.close();
+            $f7.dialog.alert('Failed to export: ' + error.message, 'Error');
+          }
+        }
+      },
+      {
+        text: 'Print Report',
+        onClick: async () => {
+          try {
+            const formatted = records.map(r => ({
+              'Student ID': r.studentId,
+              'Name': r.name,
+              'Course': r.course,
+              'Date': selectedDate,
+              'Time In': r.time_in || '-',
+              'Time Out': r.time_out || '-',
+              'Status': r.status.toUpperCase(),
+              'Confidence': r.confidence ? `${(r.confidence * 100).toFixed(1)}%` : '-'
+            }));
+            
+            const result = await exportManager.exportToPDF(formatted, `attendance_${selectedDate.replace(/\//g, '-')}.pdf`, {
+              title: `Attendance Report - ${selectedDate}`,
+              date: selectedDate
+            });
+            
+            if (result.success) {
+              $f7.toast.create({ text: 'Print dialog opened', position: 'center', closeTimeout: 2000 }).open();
+            } else {
+              $f7.dialog.alert('Print functionality requires Cordova printer plugin', 'Print Not Available');
+            }
+          } catch (error) {
+            $f7.dialog.alert('Failed to print: ' + error.message, 'Error');
+          }
+        }
+      },
+      {
+        text: 'Share via Email',
+        onClick: () => {
+          $f7.dialog.prompt('Enter email address:', 'Email Report', async (email) => {
+            try {
+              $f7.dialog.preloader('Preparing email...');
+              
+              const formatted = records.map(r => ({
+                'Student ID': r.studentId,
+                'Name': r.name,
+                'Course': r.course,
+                'Date': selectedDate,
+                'Time In': r.time_in || '-',
+                'Time Out': r.time_out || '-',
+                'Status': r.status.toUpperCase(),
+                'Confidence': r.confidence ? `${(r.confidence * 100).toFixed(1)}%` : '-'
+              }));
+              
+              // First export the file
+              const exportResult = await exportManager.exportToCSV(formatted, `attendance_${selectedDate.replace(/\//g, '-')}.csv`);
+              
+              $f7.dialog.close();
+              
+              if (exportResult.success) {
+                // Open email composer
+                if (window.cordova && window.cordova.plugins && window.cordova.plugins.email) {
+                  window.cordova.plugins.email.open({
+                    to: [email],
+                    subject: `Attendance Report - ${selectedDate}`,
+                    body: `Please find attached the attendance report for ${selectedDate}.\n\nTotal Records: ${records.length}\nPresent: ${stats.present}\nLate: ${stats.late}\nAbsent: ${stats.absent}`,
+                    attachments: [exportResult.path],
+                    isHtml: false
+                  });
+                  $f7.toast.create({ text: 'Email composer opened', position: 'center', closeTimeout: 2000 }).open();
+                } else {
+                  $f7.dialog.alert('Email plugin not available. File saved to: ' + exportResult.path, 'Export Success');
+                }
+              } else {
+                $f7.dialog.alert(`Failed to prepare email: ${exportResult.error}`, 'Error');
+              }
+            } catch (error) {
+              $f7.dialog.close();
+              $f7.dialog.alert('Failed to send email: ' + error.message, 'Error');
+            }
+          });
+        }
+      }
+    ];
+
+    $f7.actions.create({
+      buttons: [...actions, { text: 'Cancel', color: 'red' }]
+    }).open();
+  };
+
+  // Load more records
+  const loadMore = () => {
+    page++;
+    // Implement pagination if needed
+    $update();
+  };
+
+  return $render;
+}
+</script>
+
+<style scoped>
+.grid {
+  display: grid;
+}
+
+.grid-cols-3 {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.gap-2 {
+  gap: var(--space-2);
+}
+
+.gap-3 {
+  gap: var(--space-3);
+}
+
+.chip {
+  --f7-chip-bg-color: #f5f5f5;
+  --f7-chip-text-color: var(--attendance-secondary);
+}
+
+.chip-outline {
+  --f7-chip-bg-color: var(--attendance-primary);
+  --f7-chip-text-color: white;
+}
+
+.ml-2 {
+  margin-left: var(--space-2);
+}
+
+.badge-success {
+  background: var(--attendance-success);
+  color: white;
+}
+
+.badge-warning {
+  background: var(--attendance-warning);
+  color: white;
+}
+
+.badge-error {
+  background: var(--attendance-error);
+  color: white;
+}
+
+.flex {
+  display: flex;
+}
+
+.flex-1 {
+  flex: 1;
+}
+
+.items-center {
+  align-items: center;
+}
+
+.p-3 {
+  padding: var(--space-3);
+}
+
+.rounded-full {
+  border-radius: 50%;
+}
+
+.avatar {
+  width: 48px;
+  height: 48px;
+  background: var(--attendance-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.avatar .icon {
+  color: white;
+  font-size: 24px;
+}
+
+.attendance-feed-item__photo-placeholder {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, var(--attendance-primary), var(--attendance-secondary));
+  color: white;
+  font-size: 24px;
+  flex-shrink: 0;
+}
+
+.attendance-feed-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  background: white;
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-2);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.attendance-feed-item:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  transform: translateY(-2px);
+}
+
+.attendance-feed-item__info {
+  flex: 1;
+  min-width: 0;
+}
+
+.attendance-feed-item__name {
+  font-size: var(--font-md);
+  font-weight: 600;
+  color: var(--attendance-secondary);
+  margin-bottom: var(--space-1);
+}
+
+.attendance-feed-item__time {
+  font-size: var(--font-sm);
+  color: #666;
+}
+</style>

@@ -1,0 +1,844 @@
+<template>
+  <div class="page camera-page" data-name="camera">
+    <!-- Navbar -->
+    <div class="navbar">
+      <div class="navbar-bg"></div>
+      <div class="navbar-inner">
+        <div class="left">
+          <a href="#" class="link icon-only" @click=${handleBack}>
+            <i class="icon material-icons">close</i>
+          </a>
+        </div>
+        <div class="title">${manualMode === 'in' ? 'Time In' : 'Time Out'}</div>
+        <div class="right">
+          <span class="time-display">${currentTime}</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Camera Container -->
+    <div class="page-content no-padding">
+      <div class="camera-container">
+        <video id="cameraVideo" autoplay playsinline muted class="camera-video"></video>
+        <canvas id="recognitionOverlay" class="recognition-overlay"></canvas>
+        
+        <!-- Detection Status Overlay -->
+        <div class="detection-status">
+          ${permissionStatus === 'checking' ? $h`
+            <div class="status-badge waiting">
+              <i class="icon material-icons spinning">hourglass_empty</i>
+              <span>Requesting camera access...</span>
+            </div>
+          ` : permissionStatus === 'denied' ? $h`
+            <div class="status-badge error">
+              <i class="icon material-icons">videocam_off</i>
+              <span>Camera access denied</span>
+              <div class="text-xs mt-2" style="text-align: center; opacity: 0.9;">
+                Please allow camera permission in Settings
+              </div>
+              <button class="retry-btn" @click=${requestCameraPermission}>
+                <i class="icon material-icons">refresh</i>
+                Retry
+              </button>
+            </div>
+          ` : isDetecting ? $h`
+            <div class="status-badge detecting">
+              <i class="icon material-icons spinning">face</i>
+              <span>Detecting face...</span>
+            </div>
+          ` : recognized ? $h`
+            <div class="status-badge recognized">
+              <i class="icon material-icons">check_circle</i>
+              <span>${recognizedName}</span>
+            </div>
+          ` : $h`
+            <div class="status-badge waiting">
+              <i class="icon material-icons">face</i>
+              <span>Position face in camera</span>
+            </div>
+          `}
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script>
+import faceDetection from '../js/utils/faceDetection.js';
+import db from '../js/utils/database.js';
+import fileStorage from '../js/utils/fileStorage.js';
+import notifications from '../js/utils/notifications.js';
+
+export default (props, { $f7, $on, $onMounted, $onBeforeUnmount, $update, $h }) => {
+  // Get mode directly from props (passed from route params)
+  let manualMode = props.mode || 'in';
+  
+  console.log('🎯 Camera page loaded with mode:', manualMode);
+  console.log('🎯 Props received:', props);
+
+  // State variables
+  let currentTime = '';
+  let isDetecting = false;
+  let recognized = false;
+  let recognizedName = '';
+  let timeInterval = null;
+  let permissionStatus = 'checking'; // 'checking', 'granted', 'denied', 'prompt'
+  
+  // Camera variables
+  let videoEl = null;
+  let overlayCanvas = null;
+  let cameraReady = false;
+  let students = [];
+  let modelsReady = false;
+  let detectionRunning = false;
+  let detectionFrameId = null;
+  
+  // Settings
+  const lastSeenMap = new Map();
+  const CONFIDENCE_THRESHOLD = 0.6;
+  const DUP_WINDOW_MS = 5000; // 5s between detections
+  
+  const showToast = (text, timeout = 2000) => {
+    $f7.toast.create({
+      text,
+      position: 'center',
+      closeTimeout: timeout,
+    }).open();
+  };
+
+  const updateTime = () => {
+    const now = new Date();
+    currentTime = now.toLocaleTimeString('en-US', { 
+      hour: '2-digit', 
+      minute: '2-digit',
+      second: '2-digit'
+    });
+    $update();
+  };
+
+  const handleBack = () => {
+    stopCamera();
+    $f7.views.main.router.back();
+  };
+
+  const requestCameraPermission = async () => {
+    permissionStatus = 'checking';
+    $update();
+    
+    try {
+      console.log('📷 Requesting camera permission...');
+      
+      // Use Cordova permissions plugin if available (Android)
+      if (window.cordova && window.cordova.plugins && window.cordova.plugins.permissions) {
+        const permissions = window.cordova.plugins.permissions;
+        
+        // Request both CAMERA and RECORD_AUDIO permissions
+        const permissionsToRequest = [
+          permissions.CAMERA,
+          permissions.RECORD_AUDIO
+        ];
+        
+        return new Promise((resolve) => {
+          permissions.requestPermissions(permissionsToRequest, (status) => {
+            console.log('📱 Permission status:', status);
+            
+            // Check if camera permission granted
+            if (status.hasPermission || (status.CAMERA && status.CAMERA === permissions.PERMISSION_GRANTED)) {
+              console.log('✅ Camera permission granted via Cordova permissions plugin');
+              permissionStatus = 'granted';
+              $update();
+              startCamera().then(resolve).catch(() => {
+                permissionStatus = 'denied';
+                $update();
+                resolve();
+              });
+            } else {
+              console.warn('⚠️ Camera permission denied');
+              permissionStatus = 'denied';
+              $update();
+              showToast('Camera access denied. Please enable camera in app settings.', 3000);
+              resolve();
+            }
+          }, (error) => {
+            console.error('❌ Permission request error:', error);
+            // Fallback to getUserMedia
+            requestCameraPermissionFallback().then(resolve);
+          });
+        });
+      } else {
+        // Fallback to standard getUserMedia (browser or iOS)
+        console.log('🌐 Using getUserMedia fallback');
+        return await requestCameraPermissionFallback();
+      }
+    } catch (err) {
+      console.error('❌ Camera permission error:', err);
+      permissionStatus = 'denied';
+      $update();
+      
+      if (err.name === 'NotAllowedError') {
+        showToast('Camera access denied. Please enable camera in app settings.', 3000);
+      } else if (err.name === 'NotFoundError') {
+        showToast('No camera found on this device.', 3000);
+      } else {
+        showToast('Camera error: ' + err.message, 3000);
+      }
+    }
+  };
+
+  const requestCameraPermissionFallback = async () => {
+    try {
+      console.log('📷 Requesting camera via getUserMedia...');
+      
+      // Request camera permission directly - this will show native permission dialog
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { 
+          facingMode: 'user',
+          width: { ideal: 1280 },
+          height: { ideal: 720 }
+        },
+        audio: false
+      });
+      
+      console.log('✅ Camera permission granted via getUserMedia');
+      
+      // Permission granted - stop the test stream
+      stream.getTracks().forEach(track => track.stop());
+      
+      permissionStatus = 'granted';
+      $update();
+      
+      // Start camera with full settings
+      await startCamera();
+    } catch (err) {
+      console.error('❌ getUserMedia error:', err);
+      permissionStatus = 'denied';
+      $update();
+      
+      if (err.name === 'NotAllowedError') {
+        showToast('Camera access denied. Please enable camera in app settings.', 3000);
+      } else if (err.name === 'NotFoundError') {
+        showToast('No camera found on this device.', 3000);
+      } else {
+        showToast('Camera error: ' + err.message, 3000);
+      }
+    }
+  };
+
+  const checkCameraPermission = async () => {
+    permissionStatus = 'checking';
+    $update();
+    
+    try {
+      // Always request camera permission directly to trigger native permission dialog
+      // This ensures the system permission dialog shows immediately
+      console.log('🔍 Checking camera permission...');
+      await requestCameraPermission();
+    } catch (err) {
+      console.error('❌ Permission check error:', err);
+      permissionStatus = 'denied';
+      $update();
+    }
+  };
+
+  const drawOverlay = (detections = []) => {
+    if (!overlayCanvas) return;
+    const ctx = overlayCanvas.getContext('2d');
+    if (!ctx) return;
+    ctx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+
+    detections.forEach((det) => {
+      const { x, y, width, height } = det.detection.box;
+      ctx.strokeStyle = detections.length > 0 ? 'rgba(76, 175, 80, 0.9)' : 'rgba(33, 150, 243, 0.6)';
+      ctx.lineWidth = 3;
+      ctx.strokeRect(x, y, width, height);
+    });
+  };
+
+  /**
+   * Send SMS and Email notification to parent
+   * @param {number} studentId - Student ID
+   * @param {string} status - 'in' or 'out'
+   */
+  const sendParentNotification = async (studentId, status) => {
+    try {
+      // Get full student details including parent contact info
+      const studentDetails = await db.getStudent(studentId);
+      
+      if (!studentDetails) {
+        console.warn('⚠️ Student not found for notification:', studentId);
+        return;
+      }
+
+      const { parent_contact, parent_email, first_name, last_name, parent_name } = studentDetails;
+
+      // Check if any parent contact exists
+      if (!parent_contact && !parent_email) {
+        console.log('ℹ️ No parent contact information available for student:', studentId);
+        return;
+      }
+
+      console.log('📧 Sending parent notification:', {
+        student_id: studentId,
+        student_name: `${first_name} ${last_name}`,
+        parent_name: parent_name,
+        parent_contact: parent_contact,
+        parent_email: parent_email,
+        status: status
+      });
+
+      // Initialize notification service
+      await notifications.init();
+
+      // Get current time and date
+      const now = new Date();
+      const time = now.toTimeString().split(' ')[0]; // "HH:MM:SS"
+      const date = now.toISOString().split('T')[0];  // "YYYY-MM-DD"
+
+      // Send notification
+      const results = await notifications.sendAttendanceNotification({
+        phoneNumber: parent_contact,
+        emailAddress: parent_email,
+        studentName: `${first_name} ${last_name}`,
+        status: status,
+        time: time,
+        date: date
+      });
+
+      console.log('✅ Notification sent:', {
+        sms: results.sms,
+        email: results.email,
+        message: results.message
+      });
+
+      // Show success feedback to user
+      if (results.sms || results.email) {
+        const sentMethods = [];
+        if (results.sms) sentMethods.push('SMS');
+        if (results.email) sentMethods.push('Email');
+        showToast(`✓ Parent notified via ${sentMethods.join(' & ')}`, 2000);
+      } else if (parent_contact || parent_email) {
+        // Parent info exists but notification failed
+        console.log('ℹ️ Notification attempted but no method succeeded');
+      }
+    } catch (err) {
+      console.error('❌ Error sending parent notification:', err);
+      // Don't show error to user - notification failure shouldn't disrupt attendance recording
+    }
+  };
+
+  const handleRecognitionResult = async (match) => {
+    if (!match?.matched || !match.student) return;
+
+    const now = Date.now();
+    const last = lastSeenMap.get(match.student.id);
+    if (last && now - last < DUP_WINDOW_MS) return;
+    lastSeenMap.set(match.student.id, now);
+
+    isDetecting = false;
+    recognized = true;
+    recognizedName = `${match.student.first_name} ${match.student.last_name}`;
+    $update();
+
+    try {
+      // Capture current frame from video for attendance photo
+      const tempCanvas = document.createElement('canvas');
+      tempCanvas.width = videoEl.videoWidth;
+      tempCanvas.height = videoEl.videoHeight;
+      const ctx = tempCanvas.getContext('2d');
+      ctx.drawImage(videoEl, 0, 0);
+      const attendancePhotoBase64 = tempCanvas.toDataURL('image/jpeg', 0.9);
+      
+      // Save photo to file system
+      const filename = fileStorage.getAttendancePhotoFilename(match.student.id);
+      const photoPath = await fileStorage.savePhoto(attendancePhotoBase64, filename);
+      
+      // Get ALL attendance records for today to find the most recent one
+      const todayRecords = await db.getTodayAttendance();
+      
+      // Filter records by student ID
+      // match.student.id is the integer ID from students table
+      // todayRecords[].attendance_student_id is the FK to students.id
+      const studentTodayRecords = todayRecords.filter(r => {
+        return parseInt(r.attendance_student_id) === parseInt(match.student.id);
+      });
+      
+      console.log('📋 Today records for student:', {
+        student_id: match.student.id,
+        student_name: recognizedName,
+        total_today_records: todayRecords.length,
+        student_records_count: studentTodayRecords.length,
+        records: studentTodayRecords
+      });
+      
+      // Get the most recent record - already sorted by id DESC in query
+      const existing = studentTodayRecords.length > 0 
+        ? studentTodayRecords[0]
+        : null;
+      
+      console.log('📌 Most recent record:', existing);
+      
+      let status = 'in';
+
+      if (manualMode === 'in') {
+        // Validate: Cannot time-in if the LAST record has time-in without time-out
+        if (existing && existing.time_in && !existing.time_out) {
+          showToast('❌ Already timed in! Please time out first.', 3000);
+          console.log('⚠️ VALIDATION FAILED - Cannot time-in:', {
+            reason: 'Last record has time-in without time-out',
+            student_id: match.student.id,
+            name: recognizedName,
+            last_record: {
+              id: existing.id,
+              time_in: existing.time_in,
+              time_out: existing.time_out,
+              date: existing.attendance_date
+            }
+          });
+          setTimeout(() => {
+            recognized = false;
+            recognizedName = '';
+            $update();
+          }, 3000);
+          return;
+        }
+        
+        // Allow time-in (first entry today OR after previous time-out)
+        console.log('✅ VALIDATION PASSED - Proceeding with time-in:', {
+          student_id: match.student.id,
+          name: recognizedName,
+          has_previous_records: studentTodayRecords.length > 0,
+          last_record_complete: existing ? !!existing.time_out : null
+        });
+        
+        const result = await db.recordTimeIn(match.student.id, match.confidence || 0, photoPath);
+        console.log('✅ TIME IN recorded:', {
+          student_id: match.student.id,
+          name: recognizedName,
+          confidence: match.confidence,
+          photo_path: photoPath,
+          timestamp: new Date().toISOString(),
+          previous_records_count: studentTodayRecords.length,
+          result: result
+        });
+        if (result?.success === false) {
+          showToast(result.message || 'Unable to record time-in');
+          setTimeout(() => {
+            recognized = false;
+            recognizedName = '';
+            $update();
+          }, 2000);
+          return;
+        }
+        status = 'in';
+
+        // Send parent notification after successful time-in
+        await sendParentNotification(match.student.id, 'in');
+
+      } else if (manualMode === 'out') {
+        // Validate: Must have timed-in first (check if last record exists and has time_in)
+        if (!existing || !existing.time_in) {
+          showToast('❌ No time-in found! Please time in first.', 3000);
+          console.log('⚠️ VALIDATION FAILED - Cannot time-out:', {
+            reason: 'No time-in record exists',
+            student_id: match.student.id,
+            name: recognizedName,
+            has_records: studentTodayRecords.length > 0,
+            existing: existing
+          });
+          setTimeout(() => {
+            recognized = false;
+            recognizedName = '';
+            $update();
+          }, 3000);
+          return;
+        }
+        
+        // Validate: Cannot time-out if the LAST record already has time-out
+        if (existing.time_out) {
+          showToast('❌ Already timed out! Please time in first.', 3000);
+          console.log('⚠️ VALIDATION FAILED - Cannot time-out:', {
+            reason: 'Last record already has time-out',
+            student_id: match.student.id,
+            name: recognizedName,
+            last_record: {
+              id: existing.id,
+              time_in: existing.time_in,
+              time_out: existing.time_out,
+              date: existing.attendance_date
+            }
+          });
+          setTimeout(() => {
+            recognized = false;
+            recognizedName = '';
+            $update();
+          }, 3000);
+          return;
+        }
+        
+        // Allow time-out (after time-in)
+        console.log('✅ VALIDATION PASSED - Proceeding with time-out:', {
+          student_id: match.student.id,
+          name: recognizedName,
+          last_record_time_in: existing.time_in
+        });
+        
+        const result = await db.recordTimeOut(match.student.id, match.confidence || 0, photoPath);
+        console.log('✅ TIME OUT recorded:', {
+          student_id: match.student.id,
+          name: recognizedName,
+          confidence: match.confidence,
+          photo_path: photoPath,
+          timestamp: new Date().toISOString(),
+          existing_time_in: existing.time_in,
+          result: result
+        });
+        status = 'out';
+
+        // Send parent notification after successful time-out
+        await sendParentNotification(match.student.id, 'out');
+      }
+
+      showToast(`✓ ${recognizedName} ${status === 'in' ? 'checked in' : 'checked out'}`, 3000);
+
+      // Auto-close after 2 seconds
+      setTimeout(() => {
+        stopCamera();
+        $f7.views.main.router.back();
+      }, 2000);
+    } catch (err) {
+      console.error('Record attendance error:', err);
+      showToast('Error recording attendance');
+      setTimeout(() => {
+        recognized = false;
+        recognizedName = '';
+        $update();
+      }, 2000);
+    }
+  };
+
+  const startDetectionLoop = () => {
+    if (detectionRunning) return;
+    detectionRunning = true;
+    isDetecting = true;
+    $update();
+
+    const step = async () => {
+      if (!detectionRunning || !videoEl) return;
+      
+      try {
+        // Capture frame directly from video element
+        if (overlayCanvas && videoEl.readyState === videoEl.HAVE_ENOUGH_DATA) {
+          const tempCanvas = document.createElement('canvas');
+          tempCanvas.width = videoEl.videoWidth;
+          tempCanvas.height = videoEl.videoHeight;
+          const ctx = tempCanvas.getContext('2d');
+          ctx.drawImage(videoEl, 0, 0);
+          
+          const frameDataUrl = tempCanvas.toDataURL('image/jpeg', 0.8);
+          
+          const img = new Image();
+          img.src = frameDataUrl;
+          await img.decode();
+
+          const { detections, matches } = await faceDetection.detectAndRecognize({
+            image: img,
+            confidenceThreshold: CONFIDENCE_THRESHOLD,
+          });
+
+          drawOverlay(detections);
+          
+          matches.forEach((m) => {
+            if (m.matched) {
+              handleRecognitionResult(m);
+            }
+          });
+        }
+      } catch (err) {
+        console.error('Detection loop error:', err);
+      }
+
+      detectionFrameId = requestAnimationFrame(step);
+    };
+
+    detectionFrameId = requestAnimationFrame(step);
+  };
+
+  async function startCamera() {
+    if (permissionStatus !== 'granted') {
+      console.log('Camera permission not granted yet');
+      return;
+    }
+    
+    cameraReady = false;
+    $update();
+
+    if (!videoEl) {
+      videoEl = document.getElementById('cameraVideo');
+      overlayCanvas = document.getElementById('recognitionOverlay');
+    }
+
+    const container = document.querySelector('.camera-container');
+
+    try {
+      // Use getUserMedia for camera access (works on Android webview)
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: 'user',
+          width: { ideal: 1280 },
+          height: { ideal: 720 }
+        },
+        audio: false
+      });
+
+      if (videoEl) {
+        videoEl.srcObject = stream;
+        videoEl.style.display = 'block';
+        await videoEl.play();
+      }
+
+      cameraReady = true;
+
+      // Setup overlay canvas
+      if (overlayCanvas && container) {
+        overlayCanvas.width = container.offsetWidth;
+        overlayCanvas.height = container.offsetHeight;
+      }
+
+      // Load models and students
+      if (!modelsReady) {
+        showToast('Loading face recognition models...', 1500);
+        
+        modelsReady = await faceDetection.loadModels();
+        if (!modelsReady) {
+          showToast('Failed to load face detection models');
+          return;
+        }
+        
+        students = await db.getAllStudents();
+        await faceDetection.setStudents(students);
+        
+        showToast('Ready to detect faces', 1500);
+      }
+
+      // Small delay before starting detection loop
+      await new Promise(resolve => setTimeout(resolve, 300));
+      
+      startDetectionLoop();
+      $update();
+    } catch (err) {
+      console.error('Camera start error:', err);
+      permissionStatus = 'denied';
+      $update();
+      showToast('Camera permission denied or not available');
+    }
+  }
+
+  const stopCamera = () => {
+    detectionRunning = false;
+    if (detectionFrameId) {
+      cancelAnimationFrame(detectionFrameId);
+    }
+    
+    // Stop video stream
+    if (videoEl && videoEl.srcObject) {
+      const tracks = videoEl.srcObject.getTracks();
+      tracks.forEach(track => track.stop());
+      videoEl.srcObject = null;
+    }
+    
+    cameraReady = false;
+  };
+
+  $onMounted(async () => {
+    updateTime();
+    timeInterval = setInterval(updateTime, 1000);
+
+    // Check authentication
+    const user = localStorage.getItem('user');
+    if (!user) {
+      $f7.views.main.router.navigate('/', { reloadCurrent: true });
+      return;
+    }
+
+    // Initialize database if needed
+    try {
+      if (!db.isInitialized) {
+        await db.init();
+      }
+    } catch (err) {
+      console.error('Database init error:', err);
+      showToast('Database error');
+      return;
+    }
+
+    // Small delay to ensure DOM is ready (200ms)
+    await new Promise(resolve => setTimeout(resolve, 200));
+
+    // Automatically request camera permission and start camera
+    // This will trigger the native permission dialog if not already granted
+    await checkCameraPermission();
+  });
+
+  $onBeforeUnmount(() => {
+    if (timeInterval) {
+      clearInterval(timeInterval);
+    }
+    stopCamera();
+  });
+
+  return $render;
+};
+</script>
+
+<style scoped>
+.navbar {
+  --f7-navbar-bg-color: var(--attendance-primary);
+  --f7-navbar-text-color: white;
+  --f7-navbar-link-color: white;
+}
+
+.navbar .material-icons {
+  color: white;
+}
+
+.time-display {
+  font-size: var(--font-sm);
+  font-weight: 600;
+  padding: 0 var(--space-3);
+  color: white;
+}
+
+.no-padding {
+  padding: 0;
+}
+
+.camera-container {
+  position: relative;
+  width: 100%;
+  height: calc(100vh - var(--f7-navbar-height));
+  background: #000;
+  overflow: hidden;
+}
+
+.camera-video {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  background: #000;
+  display: block;
+}
+
+.recognition-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 10;
+}
+
+.detection-status {
+  position: absolute;
+  bottom: var(--space-5);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  width: 90%;
+  max-width: 300px;
+}
+
+.status-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border-radius: var(--radius-lg);
+  font-weight: 600;
+  font-size: var(--font-base);
+  color: white;
+  backdrop-filter: blur(8px);
+  animation: slideUp 0.4s ease-out;
+}
+
+.status-badge.waiting {
+  background: rgba(33, 150, 243, 0.7);
+}
+
+.status-badge.detecting {
+  background: rgba(255, 193, 7, 0.8);
+  color: #333;
+}
+
+.status-badge.recognized {
+  background: rgba(76, 175, 80, 0.9);
+}
+
+.status-badge.error {
+  background: rgba(244, 67, 54, 0.9);
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.status-badge.prompt {
+  background: rgba(33, 150, 243, 0.9);
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.retry-btn,
+.enable-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  margin-top: var(--space-2);
+  border-radius: var(--radius-base);
+  background: rgba(255, 255, 255, 0.9);
+  color: #333;
+  font-weight: 600;
+  font-size: var(--font-sm);
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.retry-btn:active,
+.enable-btn:active {
+  transform: scale(0.95);
+  background: rgba(255, 255, 255, 1);
+}
+
+.status-badge .material-icons {
+  font-size: 24px;
+}
+
+.status-badge.detecting .material-icons {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateX(-50%) translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(-50%) translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+</style>

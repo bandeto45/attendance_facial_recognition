@@ -1,0 +1,41 @@
+<template>
+  <div class="student-card">
+    <img src="${photo || 'https://via.placeholder.com/64'}" class="student-card__photo" alt="${name}" />
+    <div class="student-card__info">
+      <div class="student-card__name">${name}</div>
+      <div class="student-card__details">${studentId} • ${course} • Year ${year}</div>
+    </div>
+    <div class="student-card__actions">
+      ${onEdit ? `<button class="button button-small button-fill" @click="${onEdit}">Edit</button>` : ''}
+      ${onView ? `<button class="button button-small button-outline" @click="${onView}">View</button>` : ''}
+    </div>
+  </div>
+</template>
+
+<script>
+/**
+ * StudentCard - Display student information card
+ * 
+ * Props:
+ * - studentId (string): Student ID
+ * - name (string): Student name
+ * - photo (string): Photo URL or base64
+ * - course (string): Course name
+ * - year (number): Year level
+ * - onEdit (function): Edit button callback
+ * - onView (function): View button callback
+ */
+export default (props) => {
+  const { 
+    studentId = '',
+    name = 'Unknown',
+    photo = null,
+    course = 'N/A',
+    year = 1,
+    onEdit = null,
+    onView = null
+  } = props;
+  
+  return $render;
+}
+</script>

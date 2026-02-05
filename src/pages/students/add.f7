@@ -1,0 +1,689 @@
+<template>
+  <div class="page" data-name="student-add">
+    <!-- Navbar -->
+    <div class="navbar">
+      <div class="navbar-bg"></div>
+      <div class="navbar-inner">
+        <div class="left">
+          <a href="/students/" class="link back">
+            <i class="icon material-icons">arrow_back</i>
+            <span>Back</span>
+          </a>
+        </div>
+        <div class="title">${isEditMode ? 'Edit Student' : 'Add Student'}</div>
+        <div class="right">
+          <a href="#" class="link" @click=${handleSave}>Save</a>
+        </div>
+      </div>
+    </div>
+
+    <!-- Page Content -->
+    <div class="page-content">
+      <!-- Photo Capture -->
+      <div class="block text-center">
+        <div style="position: relative; display: inline-block;">
+          <img src="${photoData || 'https://placehold.co/150x150?text=No+Photo'}" 
+               style="width: 150px; height: 150px; border-radius: 50%; object-fit: cover; border: 4px solid var(--attendance-primary);" 
+               alt="Student Photo" />
+          <button class="button button-fill button-round" 
+                  style="position: absolute; bottom: 0; right: 0; width: 48px; height: 48px; padding: 0;"
+                  @click=${capturePhoto}>
+            <i class="icon material-icons">photo_camera</i>
+          </button>
+        </div>
+        <div class="mt-2 text-sm color-secondary">
+          ${photoData ? 'Photo captured' : 'Tap camera to capture photo'}
+        </div>
+      </div>
+
+      <!-- Student Information Form -->
+      <div class="block-title">Student Information</div>
+      <div class="list list-strong inset">
+        <ul>
+          <li class="item-content item-input">
+            <div class="item-inner">
+              <div class="item-title item-label">Student ID</div>
+              <div class="item-input-wrap">
+                <input type="text" 
+                       placeholder="Enter student ID" 
+                       value="${formData.studentId}" 
+                       @input=${(e) => updateField('studentId', e.target.value)} 
+                       required />
+              </div>
+            </div>
+          </li>
+          <li class="item-content item-input">
+            <div class="item-inner">
+              <div class="item-title item-label">First Name</div>
+              <div class="item-input-wrap">
+                <input type="text" 
+                       placeholder="Enter first name" 
+                       value="${formData.firstName}" 
+                       @input=${(e) => updateField('firstName', e.target.value)} 
+                       required />
+              </div>
+            </div>
+          </li>
+          <li class="item-content item-input">
+            <div class="item-inner">
+              <div class="item-title item-label">Last Name</div>
+              <div class="item-input-wrap">
+                <input type="text" 
+                       placeholder="Enter last name" 
+                       value="${formData.lastName}" 
+                       @input=${(e) => updateField('lastName', e.target.value)} 
+                       required />
+              </div>
+            </div>
+          </li>
+          <li class="item-content item-input">
+            <div class="item-inner">
+              <div class="item-title item-label">Course</div>
+              <div class="item-input-wrap">
+                <input type="text" 
+                       placeholder="e.g., Computer Science" 
+                       value="${formData.course}" 
+                       @input=${(e) => updateField('course', e.target.value)} 
+                       required />
+              </div>
+            </div>
+          </li>
+          <li class="item-content item-input">
+            <div class="item-inner">
+              <div class="item-title item-label">Year Level</div>
+              <div class="item-input-wrap">
+                <select value="${formData.yearLevel}" @change=${(e) => updateField('yearLevel', e.target.value)}>
+                  <option value="1">1st Year</option>
+                  <option value="2">2nd Year</option>
+                  <option value="3">3rd Year</option>
+                  <option value="4">4th Year</option>
+                </select>
+              </div>
+            </div>
+          </li>
+        </ul>
+      </div>
+
+      <!-- Parent/Guardian Information -->
+      <div class="block-title">Parent/Guardian Information</div>
+      <div class="list list-strong inset">
+        <ul>
+          <li class="item-content item-input">
+            <div class="item-inner">
+              <div class="item-title item-label">Parent/Guardian Name</div>
+              <div class="item-input-wrap">
+                <input type="text" 
+                       placeholder="Enter parent/guardian name" 
+                       value="${formData.parentName}" 
+                       @input=${(e) => updateField('parentName', e.target.value)} />
+              </div>
+            </div>
+          </li>
+          <li class="item-content item-input">
+            <div class="item-inner">
+              <div class="item-title item-label">Relationship</div>
+              <div class="item-input-wrap">
+                <select value="${formData.relationship}" @change=${(e) => updateField('relationship', e.target.value)}>
+                  <option value="">Select relationship</option>
+                  <option value="Father">Father</option>
+                  <option value="Mother">Mother</option>
+                  <option value="Guardian">Guardian</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+            </div>
+          </li>
+          <li class="item-content item-input">
+            <div class="item-inner">
+              <div class="item-title item-label">Contact Number</div>
+              <div class="item-input-wrap">
+                <input type="tel" 
+                       placeholder="e.g., +63 912 345 6789" 
+                       value="${formData.parentContact}" 
+                       @input=${(e) => updateField('parentContact', e.target.value)} />
+              </div>
+            </div>
+          </li>
+          <li class="item-content item-input">
+            <div class="item-inner">
+              <div class="item-title item-label">Email Address</div>
+              <div class="item-input-wrap">
+                <input type="email" 
+                       placeholder="parent@example.com" 
+                       value="${formData.parentEmail}" 
+                       @input=${(e) => updateField('parentEmail', e.target.value)} />
+              </div>
+            </div>
+          </li>
+        </ul>
+      </div>
+
+      <!-- Face Encoding -->
+      <div class="block-title">Face Recognition Training</div>
+      <div class="block">
+        <div class="card p-4">
+          ${faceEncoding ? $h`
+            <div class="flex items-center gap-3">
+              <i class="icon material-icons text-5xl color-success">verified</i>
+              <div class="flex-1">
+                <div class="text-base font-semibold">Face Trained</div>
+                <div class="text-sm color-secondary">Ready for recognition</div>
+              </div>
+              <button class="button button-outline button-small" @click=${retrainFace}>Retrain</button>
+            </div>
+          ` : $h`
+            <div class="text-center">
+              <i class="icon material-icons text-5xl color-secondary mb-3">person_off</i>
+              <div class="text-base font-semibold mb-2">No Face Encoding</div>
+              <div class="text-sm color-secondary mb-4">
+                Capture a photo first, then train the face for recognition
+              </div>
+              <button class="button button-fill ${!photoData ? 'disabled' : ''}" 
+                      @click=${trainFace} 
+                      ${!photoData ? 'disabled' : ''}>
+                <i class="icon material-icons mr-2">sparkles</i>
+                Train Face Recognition
+              </button>
+            </div>
+          `}
+        </div>
+      </div>
+
+      <!-- Action Buttons -->
+      <div class="block">
+        <div class="flex gap-3">
+          <button class="button button-outline flex-1" @click=${handleCancel}>Cancel</button>
+          <button class="button button-fill flex-1" @click=${handleSave}>
+            <i class="icon material-icons mr-2">${isEditMode ? 'save' : 'check'}</i>
+            ${isEditMode ? 'Update Student' : 'Save Student'}
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script>
+import database from '../../js/utils/database.js';
+import faceDetection from '../../js/utils/faceDetection.js';
+import fileStorage from '../../js/utils/fileStorage.js';
+
+export default (props, { $f7, $f7route, $onMounted, $update, $store, $h }) => {
+  // Check if we're in edit mode
+  const editStudentId = $f7route.query?.studentId || null;
+  const isEditMode = !!editStudentId;
+  
+  let photoData = null;
+  let faceEncoding = null;
+  let originalStudentId = null; // Store original student_id for updates
+  let formData = {
+    studentId: '',
+    firstName: '',
+    lastName: '',
+    course: '',
+    yearLevel: '1',
+    parentName: '',
+    relationship: '',
+    parentContact: '',
+    parentEmail: ''
+  };
+
+  $onMounted(async () => {
+    await database.init();
+    
+    // Load student data if in edit mode
+    if (isEditMode) {
+      await loadStudentForEdit(editStudentId);
+    }
+    
+    // Face detection models will be loaded when needed
+  });
+
+  async function loadStudentForEdit(studentId) {
+    try {
+      $f7.dialog.preloader('Loading student...');
+      
+      const student = await database.getStudent(studentId);
+      
+      if (!student) {
+        $f7.dialog.close();
+        $f7.dialog.alert('Student not found', 'Error');
+        $f7.views.main.router.back();
+        return;
+      }
+      
+      // Populate form data
+      formData.studentId = student.student_id;
+      formData.firstName = student.first_name;
+      formData.lastName = student.last_name;
+      formData.course = student.course;
+      formData.yearLevel = String(student.year_level);
+      formData.parentName = student.parent_name || '';
+      formData.relationship = student.relationship || '';
+      formData.parentContact = student.parent_contact || '';
+      formData.parentEmail = student.parent_email || '';
+      
+      // Store original student_id for database update
+      originalStudentId = student.student_id;
+      
+      // Load photo if exists
+      if (student.photo_path) {
+        try {
+          photoData = await fileStorage.loadPhoto(student.photo_path);
+          console.log('Photo loaded for editing');
+        } catch (err) {
+          console.error('Failed to load photo:', err);
+        }
+      }
+      
+      // Load face encoding if exists
+      if (student.face_encoding) {
+        try {
+          const parsed = JSON.parse(student.face_encoding);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            faceEncoding = student.face_encoding;
+            console.log('Face encoding loaded for editing');
+          }
+        } catch (err) {
+          console.error('Failed to parse face encoding:', err);
+        }
+      }
+      
+      $f7.dialog.close();
+      $update();
+    } catch (error) {
+      console.error('Load student for edit error:', error);
+      $f7.dialog.close();
+      $f7.dialog.alert('Failed to load student data', 'Error');
+      $f7.views.main.router.back();
+    }
+  }
+
+  const updateField = (field, value) => {
+    formData[field] = value;
+    $update();
+  };
+
+  const capturePhoto = () => {
+    const actions = [
+      {
+        text: 'Take Photo',
+        onClick: () => takePhoto()
+      },
+      {
+        text: 'Choose from Gallery',
+        onClick: () => chooseFromGallery()
+      }
+    ];
+
+    $f7.actions.create({
+      buttons: [...actions, { text: 'Cancel', color: 'red' }]
+    }).open();
+  };
+
+  async function takePhoto() {
+    if (navigator.camera) {
+      // Cordova Camera plugin
+      navigator.camera.getPicture(
+        (imageData) => {
+          photoData = 'data:image/jpeg;base64,' + imageData;
+          faceEncoding = null; // Reset encoding when new photo
+          console.log('Photo captured successfully (Cordova), size:', imageData.length);
+          $update();
+          
+          // Show success toast
+          $f7.toast.create({
+            text: 'Photo captured! Now train face recognition.',
+            position: 'center',
+            closeTimeout: 2000
+          }).open();
+        },
+        (error) => {
+          console.error('Camera error:', error);
+          $f7.dialog.alert('Failed to capture photo: ' + error, 'Error');
+        },
+        {
+          quality: 90,
+          destinationType: navigator.camera.DestinationType.DATA_URL,
+          sourceType: navigator.camera.PictureSourceType.CAMERA,
+          encodingType: navigator.camera.EncodingType.JPEG,
+          correctOrientation: true,
+          targetWidth: 800,
+          targetHeight: 800
+        }
+      );
+    } else {
+      // Browser fallback - file input
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'image/*';
+      input.capture = 'camera';
+      input.onchange = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          photoData = event.target.result;
+          faceEncoding = null;
+          console.log('Photo loaded from file (Browser)');
+          $update();
+          
+          $f7.toast.create({
+            text: 'Photo loaded! Now train face recognition.',
+            position: 'center',
+            closeTimeout: 2000
+          }).open();
+        };
+        reader.onerror = (err) => {
+          console.error('FileReader error:', err);
+          $f7.dialog.alert('Failed to load photo', 'Error');
+        };
+        reader.readAsDataURL(file);
+      };
+      input.click();
+    }
+  }
+
+  async function chooseFromGallery() {
+    if (navigator.camera) {
+      navigator.camera.getPicture(
+        (imageData) => {
+          photoData = 'data:image/jpeg;base64,' + imageData;
+          faceEncoding = null;
+          console.log('Photo selected from gallery (Cordova), size:', imageData.length);
+          $update();
+          
+          $f7.toast.create({
+            text: 'Photo selected! Now train face recognition.',
+            position: 'center',
+            closeTimeout: 2000
+          }).open();
+        },
+        (error) => {
+          console.error('Gallery error:', error);
+          $f7.dialog.alert('Failed to choose photo: ' + error, 'Error');
+        },
+        {
+          quality: 90,
+          destinationType: navigator.camera.DestinationType.DATA_URL,
+          sourceType: navigator.camera.PictureSourceType.PHOTOLIBRARY,
+          encodingType: navigator.camera.EncodingType.JPEG,
+          targetWidth: 800,
+          targetHeight: 800
+        }
+      );
+    } else {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'image/*';
+      input.onchange = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          photoData = event.target.result;
+          faceEncoding = null;
+          console.log('Photo selected from gallery (Browser)');
+          $update();
+          
+          $f7.toast.create({
+            text: 'Photo selected! Now train face recognition.',
+            position: 'center',
+            closeTimeout: 2000
+          }).open();
+        };
+        reader.onerror = (err) => {
+          console.error('FileReader error:', err);
+          $f7.dialog.alert('Failed to load photo', 'Error');
+        };
+        reader.readAsDataURL(file);
+      };
+      input.click();
+    }
+  }
+
+  const trainFace = async () => {
+    if (!photoData) {
+      $f7.dialog.alert('Please capture a photo first', 'No Photo');
+      return;
+    }
+
+    console.log('Starting face training...');
+    console.log('Photo data exists:', !!photoData);
+    console.log('Photo data length:', photoData.length);
+    console.log('Photo data starts with:', photoData.substring(0, 50));
+
+    $f7.dialog.preloader('Training face...');
+
+    try {
+      // Load models if not already loaded (auto-detect path)
+      console.log('Loading face detection models...');
+      const loaded = await faceDetection.loadModels();
+      if (!loaded) {
+        throw new Error('Failed to load face recognition models. Check console for details.');
+      }
+      console.log('Models loaded successfully');
+      
+      // Create image element from base64
+      console.log('Creating image element from photo data...');
+      const img = new Image();
+      img.crossOrigin = 'anonymous'; // Enable CORS for image
+      
+      // Wait for image to load
+      await new Promise((resolve, reject) => {
+        img.onload = () => {
+          console.log('Image loaded successfully:', img.width, 'x', img.height);
+          resolve();
+        };
+        img.onerror = (err) => {
+          console.error('Image load error:', err);
+          reject(new Error('Failed to load image from photo data'));
+        };
+        img.src = photoData;
+      });
+      
+      // Detect face and extract descriptor
+      console.log('Detecting face in image...');
+      const detection = await faceDetection.detectSingleFace(img);
+      console.log('Detection result:', detection ? 'Face found' : 'No face detected');
+      
+      if (detection && detection.descriptor) {
+        faceEncoding = JSON.stringify(Array.from(detection.descriptor));
+        console.log('Face encoding generated, length:', faceEncoding.length);
+        
+        $f7.dialog.close();
+        $f7.toast.create({
+          text: 'Face trained successfully!',
+          position: 'center',
+          closeTimeout: 2000,
+          cssClass: 'color-green'
+        }).open();
+        $update();
+      } else {
+        $f7.dialog.close();
+        console.warn('No face detected in the image');
+        $f7.dialog.alert(
+          'No face detected in the photo. Please ensure:\n\n' +
+          '• Face is clearly visible\n' +
+          '• Good lighting\n' +
+          '• Face is looking at camera\n' +
+          '• Only one face in photo',
+          'Training Failed'
+        );
+      }
+    } catch (error) {
+      console.error('Face training error:', error);
+      console.error('Error stack:', error.stack);
+      $f7.dialog.close();
+      
+      let errorMsg = 'Face training error: ' + error.message;
+      if (error.message.includes('models not loaded')) {
+        errorMsg = 'Face detection models failed to load. Please check your internet connection and try again.';
+      } else if (error.message.includes('image')) {
+        errorMsg = 'Failed to process the photo. Please try capturing a new photo.';
+      }
+      
+      $f7.dialog.alert(errorMsg, 'Training Error');
+    }
+  };
+
+  const retrainFace = () => {
+    faceEncoding = null;
+    $update();
+    trainFace();
+  };
+
+  const handleSave = async () => {
+    // Validate form
+    if (!formData.studentId || !formData.firstName || !formData.lastName || !formData.course) {
+      $f7.dialog.alert('Please fill in all required fields', 'Validation Error');
+      return;
+    }
+
+    if (!photoData) {
+      $f7.dialog.alert('Please capture a student photo', 'Missing Photo');
+      return;
+    }
+
+    if (!faceEncoding) {
+      const proceed = await new Promise(resolve => {
+        $f7.dialog.confirm(
+          'Face recognition has not been trained. The student will be ' + (isEditMode ? 'updated' : 'added') + ' but cannot be recognized. Continue?',
+          'Warning',
+          () => resolve(true),
+          () => resolve(false)
+        );
+      });
+      if (!proceed) return;
+    }
+
+    $f7.dialog.preloader(isEditMode ? 'Updating student...' : 'Saving student...');
+
+    try {
+      let photoPath;
+      
+      // Save photo to file system (only if photo was changed or new)
+      if (photoData.startsWith('data:')) {
+        // New photo captured or changed
+        const filename = fileStorage.getStudentPhotoFilename(formData.studentId);
+        photoPath = await fileStorage.savePhoto(photoData, filename);
+        console.log('New photo saved:', photoPath);
+      } else {
+        // Photo not changed, use existing path
+        photoPath = photoData;
+        console.log('Using existing photo path:', photoPath);
+      }
+      
+      const studentData = {
+        student_id: formData.studentId,
+        first_name: formData.firstName,
+        last_name: formData.lastName,
+        course: formData.course,
+        year_level: parseInt(formData.yearLevel),
+        photo_path: photoPath,
+        face_encoding: faceEncoding,
+        parent_name: formData.parentName,
+        relationship: formData.relationship,
+        parent_contact: formData.parentContact,
+        parent_email: formData.parentEmail
+      };
+      
+      if (isEditMode) {
+        // Update existing student
+        await database.updateStudent(parseInt(editStudentId, 10), studentData);
+        console.log('Student updated successfully');
+      } else {
+        // Add new student
+        await database.addStudent(studentData);
+        console.log('Student added successfully');
+      }
+
+      $f7.dialog.close();
+      $f7.toast.create({
+        text: isEditMode ? 'Student updated successfully!' : 'Student added successfully!',
+        position: 'center',
+        closeTimeout: 2000
+      }).open();
+
+      // Navigate back
+      setTimeout(() => {
+        $f7.views.main.router.back();
+      }, 500);
+    } catch (error) {
+      console.error('Save student error:', error);
+      $f7.dialog.close();
+      if (error.message && error.message.includes('UNIQUE constraint')) {
+        $f7.dialog.alert('A student with this ID already exists', 'Duplicate Student');
+      } else {
+        $f7.dialog.alert('Failed to ' + (isEditMode ? 'update' : 'save') + ' student: ' + error.message, 'Error');
+      }
+    }
+  };
+
+  const handleCancel = () => {
+    if (photoData || formData.studentId || formData.firstName) {
+      $f7.dialog.confirm(
+        'You have unsaved changes. Are you sure you want to cancel?',
+        'Unsaved Changes',
+        () => {
+          $f7.views.main.router.back();
+        }
+      );
+    } else {
+      $f7.views.main.router.back();
+    }
+  };
+
+  return $render;
+}
+</script>
+
+<style scoped>
+.navbar {
+  --f7-navbar-bg-color: var(--attendance-primary);
+  --f7-navbar-text-color: white;
+  --f7-navbar-link-color: white;
+}
+
+.navbar .material-icons {
+  color: white;
+}
+
+.mr-2 {
+  margin-right: var(--space-2);
+}
+
+.mt-2 {
+  margin-top: var(--space-2);
+}
+
+.mb-2 {
+  margin-bottom: var(--space-2);
+}
+
+.mb-3 {
+  margin-bottom: var(--space-3);
+}
+
+.mb-4 {
+  margin-bottom: var(--space-4);
+}
+
+.gap-3 {
+  gap: var(--space-3);
+}
+
+.flex-1 {
+  flex: 1;
+}
+
+.text-5xl {
+  font-size: var(--font-5xl);
+}
+
+.p-4 {
+  padding: var(--space-4);
+}
+</style>

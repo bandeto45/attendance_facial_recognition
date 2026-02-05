@@ -1,0 +1,308 @@
+<template>
+  <div class="page login-page" data-name="login">
+    <div class="page-content login-screen-content">
+      <div class="login-screen-form">
+        <!-- Logo/Title -->
+        <div class="text-center mb-5">
+          <i class="icon material-icons text-5xl color-primary">how_to_reg</i>
+          <h1 class="text-3xl font-bold mt-3 mb-2">Attendance System</h1>
+          <p class="text-base color-secondary">Live Facial Recognition</p>
+        </div>
+
+        <!-- Login Form -->
+        <div class="list list-strong-ios list-dividers-ios">
+          <ul>
+            <li class="item-content item-input">
+              <div class="item-inner">
+                <div class="item-title item-label">Username</div>
+                <div class="item-input-wrap">
+                  <input type="text" name="username" placeholder="Enter username" value="${username}" @input="${handleUsernameInput}" />
+                  <span class="input-clear-button"></span>
+                </div>
+              </div>
+            </li>
+            <li class="item-content item-input">
+              <div class="item-inner">
+                <div class="item-title item-label">Password</div>
+                <div class="item-input-wrap">
+                  <input type="password" name="password" placeholder="Enter password" value="${password}" @input="${handlePasswordInput}" />
+                  <span class="input-clear-button"></span>
+                </div>
+              </div>
+            </li>
+          </ul>
+        </div>
+
+        <!-- Role Selection -->
+        <div class="list list-strong-ios list-dividers-ios mt-4">
+          <ul>
+            <li>
+              <label class="item-radio item-content">
+                <input type="radio" name="role" value="admin" checked @change="${handleRoleChange}" />
+                <i class="icon icon-radio"></i>
+                <div class="item-inner">
+                  <div class="item-title">Administrator</div>
+                </div>
+              </label>
+            </li>
+            <li>
+              <label class="item-radio item-content">
+                <input type="radio" name="role" value="operator" @change="${handleRoleChange}" />
+                <i class="icon icon-radio"></i>
+                <div class="item-inner">
+                  <div class="item-title">Operator</div>
+                </div>
+              </label>
+            </li>
+          </ul>
+        </div>
+
+        <!-- Login Button -->
+        <div class="block">
+          <button class="button button-fill button-large button-raised" @click="${handleLogin}">
+            <span class="if-not-md">Sign In</span>
+            <span class="if-md">Sign In</span>
+          </button>
+        </div>
+
+        <!-- Footer Info -->
+        <div class="block text-center mt-5">
+          <p class="text-sm color-secondary">Version 1.0.0</p>
+          <p class="text-xs color-secondary mt-1">SQLite Local Storage</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script>
+export default (props, { $f7, $on, $onMounted, $update }) => {
+  let username = '';
+  let password = '';
+  let role = 'admin';
+
+  const handleUsernameInput = (e) => {
+    username = e.target.value;
+    $update();
+  };
+
+  const handlePasswordInput = (e) => {
+    password = e.target.value;
+    $update();
+  };
+
+  const handleRoleChange = (e) => {
+    role = e.target.value;
+    $update();
+  };
+
+  const handleLogin = () => {
+    // Basic validation
+    if (!username || !password) {
+      $f7.dialog.alert('Please enter username and password', 'Login Error');
+      return;
+    }
+
+    // For demo purposes - in production, validate against database
+    if (username === 'admin' && password === 'admin') {
+      // Store session
+      localStorage.setItem('user', JSON.stringify({ username, role }));
+      
+      // Navigate to recognition page
+      $f7.views.main.router.navigate('/recognition/');
+      
+      $f7.toast.create({
+        text: 'Login successful!',
+        position: 'center',
+        closeTimeout: 2000,
+      }).open();
+    } else {
+      $f7.dialog.alert('Invalid username or password', 'Login Error');
+    }
+  };
+
+  const requestPermissions = async () => {
+    try {
+      console.log('🔐 Requesting SMS, Camera, and Audio permissions...');
+      
+      // Use Cordova permissions plugin if available (Android)
+      if (window.cordova && window.cordova.plugins && window.cordova.plugins.permissions) {
+        const permissions = window.cordova.plugins.permissions;
+        
+        const permissionsToRequest = [
+          permissions.SEND_SMS,
+          permissions.CAMERA,
+          permissions.RECORD_AUDIO
+        ];
+        
+        return new Promise((resolve) => {
+          permissions.requestPermissions(permissionsToRequest, (status) => {
+            console.log('📱 Permission status:', status);
+            
+            // Check if permissions were granted
+            const hasSMS = status.SEND_SMS === permissions.PERMISSION_GRANTED;
+            const hasCamera = status.CAMERA === permissions.PERMISSION_GRANTED;
+            const hasAudio = status.RECORD_AUDIO === permissions.PERMISSION_GRANTED;
+            
+            console.log('📱 Permission details:', {
+              SMS: hasSMS ? '✅ Granted' : '❌ Denied',
+              Camera: hasCamera ? '✅ Granted' : '❌ Denied',
+              Audio: hasAudio ? '✅ Granted' : '❌ Denied'
+            });
+            
+            if (status.hasPermission || (hasCamera && hasAudio)) {
+              console.log('✅ Permissions granted via Cordova');
+              
+              const grantedPerms = [];
+              if (hasSMS) grantedPerms.push('SMS');
+              if (hasCamera) grantedPerms.push('Camera');
+              if (hasAudio) grantedPerms.push('Audio');
+              
+              $f7.toast.create({
+                text: `${grantedPerms.join(', ')} access granted`,
+                position: 'center',
+                closeTimeout: 2500,
+                cssClass: 'color-success'
+              }).open();
+              
+              resolve();
+            } else {
+              console.warn('⚠️ Some permissions denied');
+              
+              const deniedPerms = [];
+              if (!hasSMS) deniedPerms.push('SMS');
+              if (!hasCamera) deniedPerms.push('Camera');
+              if (!hasAudio) deniedPerms.push('Audio');
+              
+              $f7.dialog.alert(
+                `${deniedPerms.join(', ')} access is required for the app to work properly`,
+                'Permissions Required'
+              );
+              
+              resolve();
+            }
+          }, (error) => {
+            console.error('❌ Permission request error:', error);
+            // Fallback to getUserMedia (camera/audio only)
+            requestPermissionsFallback().then(resolve);
+          });
+        });
+      } else {
+        // iOS/browser fallback
+        return await requestPermissionsFallback();
+      }
+    } catch (error) {
+      console.error('❌ Permission request error:', error);
+      
+      // Show user-friendly error message
+      if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
+        $f7.dialog.alert(
+          'Camera and audio access is required for facial recognition. Please enable permissions in your device settings.',
+          'Permissions Required'
+        );
+      } else if (error.name === 'NotFoundError') {
+        $f7.dialog.alert(
+          'No camera or microphone found on this device.',
+          'Hardware Not Found'
+        );
+      } else {
+        console.error('Permission error details:', error);
+      }
+    }
+  };
+
+  const requestPermissionsFallback = async () => {
+    console.log('🌐 Using getUserMedia fallback for permissions...');
+    
+    try {
+      // Request camera and audio permissions
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: 'user',
+          width: { ideal: 1280 },
+          height: { ideal: 720 }
+        },
+        audio: true
+      });
+      
+      console.log('✅ Camera and audio permissions granted via getUserMedia');
+      
+      // Stop the stream immediately - we just needed to trigger the permission
+      stream.getTracks().forEach(track => track.stop());
+      
+      $f7.toast.create({
+        text: 'Camera and audio access granted',
+        position: 'center',
+        closeTimeout: 2000,
+        cssClass: 'color-success'
+      }).open();
+    } catch (error) {
+      console.error('❌ getUserMedia fallback error:', error);
+      
+      // Show user-friendly error message
+      if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
+        $f7.dialog.alert(
+          'Camera and audio access is required for facial recognition. Please enable permissions in your device settings.',
+          'Permissions Required'
+        );
+      } else if (error.name === 'NotFoundError') {
+        $f7.dialog.alert(
+          'No camera or microphone found on this device.',
+          'Hardware Not Found'
+        );
+      } else {
+        console.error('Permission error details:', error);
+      }
+    }
+  };
+
+
+  $onMounted(() => {
+    // Check if already logged in
+    const user = localStorage.getItem('user');
+    if (user) {
+      $f7.views.main.router.navigate('/recognition/', { reloadCurrent: true });
+    } else {
+      // Request permissions on page load
+      setTimeout(() => {
+        requestPermissions();
+      }, 500); // Small delay to let page render first
+    }
+  });
+
+  return $render;
+};
+</script>
+
+<style scoped>
+.login-page {
+  background: linear-gradient(135deg, #f5f5f5 0%, #e8f5e9 100%);
+}
+
+.theme-dark .login-page {
+  background: linear-gradient(135deg, #1a1f1f 0%, #0d2818 100%);
+}
+
+.login-screen-content {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: var(--space-4);
+}
+
+.login-screen-form {
+  width: 100%;
+  max-width: 400px;
+}
+
+.login-page .list {
+  margin: var(--space-3) 0;
+}
+
+.login-page .button {
+  height: var(--height-lg);
+  font-size: var(--font-md);
+  font-weight: 600;
+}
+</style>

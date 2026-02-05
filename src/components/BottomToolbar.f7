@@ -1,0 +1,54 @@
+<template>
+  <div class="toolbar toolbar-bottom tabbar">
+    <div class="toolbar-inner">
+      <a href="/recognition/" class="tab-link ${activeTab === 'recognition' ? 'tab-link-active' : ''}" data-tab="recognition">
+        <i class="icon material-icons">videocam</i>
+        <span class="tabbar-label">Recognition</span>
+      </a>
+      <a href="/attendance/records/" class="tab-link ${activeTab === 'attendance' ? 'tab-link-active' : ''}" data-tab="attendance">
+        <i class="icon material-icons">assignment</i>
+        <span class="tabbar-label">Attendance</span>
+      </a>
+      <a href="/students/" class="tab-link ${activeTab === 'students' ? 'tab-link-active' : ''}" data-tab="students">
+        <i class="icon material-icons">people</i>
+        <span class="tabbar-label">Students</span>
+      </a>
+     
+    </div>
+  </div>
+</template>
+
+<script>
+/**
+ * BottomToolbar - Main navigation toolbar for all pages
+ * 
+ * Props:
+ * - activeTab (string): Currently active tab ('recognition', 'attendance', 'students', 'settings')
+ *   Default: 'recognition'
+ */
+export default (props, { $f7 }) => {
+  const { activeTab = 'recognition' } = props;
+  
+  return $render;
+}
+</script>
+
+<style>
+.toolbar-bottom {
+  --f7-toolbar-bg-color: var(--attendance-bg);
+  --f7-toolbar-border-color: rgba(76, 175, 80, 0.2);
+}
+
+.tabbar .tab-link {
+  transition: color 0.3s ease;
+}
+
+.tabbar .tab-link-active {
+  color: var(--attendance-primary);
+}
+
+.tabbar-label {
+  font-size: 11px;
+  margin-top: 2px;
+}
+</style>

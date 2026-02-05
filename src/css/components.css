@@ -1,0 +1,435 @@
+/**
+ * Component-specific styles for Attendance System
+ * These extend the base utility classes from app.less
+ */
+
+/* Cards */
+.card {
+  padding: var(--card-padding);
+  border-radius: var(--card-radius);
+  background: var(--attendance-bg);
+  box-shadow: var(--card-shadow);
+  transition: all 0.3s ease;
+}
+
+.card--elevated {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+}
+
+.card--outline {
+  border: 1px solid rgba(76, 175, 80, 0.3);
+  box-shadow: none;
+}
+
+.card__header {
+  margin-bottom: var(--space-3);
+  font-size: var(--font-lg);
+  font-weight: 600;
+  color: var(--attendance-secondary);
+}
+
+.card__body {
+  font-size: var(--font-base);
+  line-height: 1.6;
+  color: var(--attendance-secondary);
+}
+
+.card__footer {
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+/* Buttons */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--font-base);
+  font-weight: 500;
+  border-radius: var(--radius-lg);
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-primary {
+  background: var(--attendance-primary);
+  color: white;
+}
+
+.btn-primary:hover {
+  background: #45a049;
+}
+
+.btn-primary:active {
+  transform: scale(0.98);
+}
+
+.btn-secondary {
+  background: var(--attendance-secondary);
+  color: white;
+}
+
+.btn-secondary:hover {
+  background: #1a2020;
+}
+
+.btn-outline {
+  background: transparent;
+  border: 2px solid var(--attendance-primary);
+  color: var(--attendance-primary);
+}
+
+.btn-outline:hover {
+  background: var(--attendance-primary);
+  color: white;
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--attendance-primary);
+}
+
+.btn-ghost:hover {
+  background: rgba(76, 175, 80, 0.1);
+}
+
+.btn-sm {
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--font-sm);
+}
+
+.btn-lg {
+  padding: var(--space-3) var(--space-6);
+  font-size: var(--font-lg);
+}
+
+/* Status Badges */
+.badge {
+  display: inline-block;
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--font-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  border-radius: var(--radius-base);
+}
+
+.badge-success {
+  background: rgba(76, 175, 80, 0.2);
+  color: var(--attendance-success);
+}
+
+.badge-warning {
+  background: rgba(255, 193, 7, 0.2);
+  color: var(--attendance-warning);
+}
+
+.badge-error {
+  background: rgba(244, 67, 54, 0.2);
+  color: var(--attendance-error);
+}
+
+.badge-info {
+  background: rgba(33, 150, 243, 0.2);
+  color: var(--attendance-info);
+}
+
+/* Recognition Overlay */
+.recognition-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.recognition-overlay canvas {
+  width: 100%;
+  height: 100%;
+}
+
+/* Camera Viewfinder */
+.camera-viewfinder {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background: #000;
+  overflow: hidden;
+}
+
+.camera-viewfinder video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Camera Controls */
+.camera-controls {
+  position: absolute;
+  bottom: var(--space-6);
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: center;
+  gap: var(--space-4);
+  z-index: 10;
+}
+
+.camera-controls .control-btn {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.9);
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.camera-controls .control-btn:active {
+  transform: scale(0.95);
+}
+
+.camera-controls .control-btn i {
+  font-size: 28px;
+  color: var(--attendance-secondary);
+}
+
+.camera-controls .capture-btn {
+  width: 68px;
+  height: 68px;
+  background: var(--attendance-primary);
+}
+
+.camera-controls .capture-btn i {
+  color: white;
+  font-size: 32px;
+}
+
+/* Attendance Feed */
+.attendance-feed-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  background: var(--attendance-bg);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-2);
+  box-shadow: var(--card-shadow);
+}
+
+.attendance-feed-item__photo {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: #e0e0e0;
+}
+
+.attendance-feed-item__info {
+  flex: 1;
+}
+
+.attendance-feed-item__name {
+  font-size: var(--font-base);
+  font-weight: 600;
+  color: var(--attendance-secondary);
+}
+
+.attendance-feed-item__time {
+  font-size: var(--font-sm);
+  color: #666;
+}
+
+.attendance-feed-item__status {
+  font-size: var(--font-xs);
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+}
+
+.attendance-feed-item__status.in {
+  background: rgba(76, 175, 80, 0.2);
+  color: var(--attendance-success);
+}
+
+.attendance-feed-item__status.out {
+  background: rgba(255, 87, 34, 0.2);
+  color: var(--attendance-accent);
+}
+
+/* Student Card */
+.student-card {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  background: var(--attendance-bg);
+  border-radius: var(--radius-md);
+  box-shadow: var(--card-shadow);
+}
+
+.student-card__photo {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: #e0e0e0;
+}
+
+.student-card__info {
+  flex: 1;
+}
+
+.student-card__name {
+  font-size: var(--font-lg);
+  font-weight: 600;
+  color: var(--attendance-secondary);
+}
+
+.student-card__details {
+  font-size: var(--font-sm);
+  color: #666;
+  margin-top: 4px;
+}
+
+.student-card__actions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+/* Login Page */
+.login-page {
+  background: linear-gradient(135deg, var(--attendance-primary) 0%, #2E7D32 100%);
+}
+
+.login-page .login-screen-content {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: var(--space-6);
+}
+
+.login-page .login-screen-form {
+  width: 100%;
+  max-width: 400px;
+  background: white;
+  border-radius: var(--radius-2xl);
+  padding: var(--space-8);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+}
+
+/* Loading Spinner */
+.loading-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+}
+
+.loading-overlay .spinner {
+  width: 48px;
+  height: 48px;
+  border: 4px solid rgba(255, 255, 255, 0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Empty State */
+.empty-state {
+  text-align: center;
+  padding: var(--space-9);
+}
+
+.empty-state__icon {
+  font-size: 64px;
+  color: #ccc;
+  margin-bottom: var(--space-4);
+}
+
+.empty-state__title {
+  font-size: var(--font-xl);
+  font-weight: 600;
+  color: var(--attendance-secondary);
+  margin-bottom: var(--space-2);
+}
+
+.empty-state__message {
+  font-size: var(--font-base);
+  color: #666;
+}
+
+/* Bottom Toolbar */
+.toolbar-bottom {
+  z-index: 500;
+}
+
+/* Stat Card */
+.stat-card {
+  background: var(--attendance-bg);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  box-shadow: var(--card-shadow);
+  text-align: center;
+}
+
+.stat-card__value {
+  font-size: var(--font-3xl);
+  font-weight: 700;
+  color: var(--attendance-primary);
+}
+
+.stat-card__label {
+  font-size: var(--font-sm);
+  color: #666;
+  margin-top: var(--space-1);
+}
+
+/* Recognition Status */
+.recognition-status {
+  position: absolute;
+  top: var(--space-4);
+  left: var(--space-4);
+  right: var(--space-4);
+  background: rgba(0, 0, 0, 0.7);
+  color: white;
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  z-index: 10;
+}
+
+.recognition-status__indicator {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--attendance-success);
+  margin-right: var(--space-2);
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.recognition-status.inactive .recognition-status__indicator {
+  background: #666;
+  animation: none;
+}

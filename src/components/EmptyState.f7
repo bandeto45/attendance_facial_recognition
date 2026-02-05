@@ -1,0 +1,32 @@
+<template>
+  <div class="empty-state">
+    <i class="empty-state__icon material-icons">${icon}</i>
+    <div class="empty-state__title">${title}</div>
+    <div class="empty-state__message">${message}</div>
+    ${actionText ? `<button class="button button-fill button-large mt-4" @click="${onAction}">${actionText}</button>` : ''}
+  </div>
+</template>
+
+<script>
+/**
+ * EmptyState - Empty state placeholder component
+ * 
+ * Props:
+ * - icon (string): Framework7 icon name
+ * - title (string): Empty state title
+ * - message (string): Empty state message
+ * - actionText (string): Action button text (optional)
+ * - onAction (function): Action button callback (optional)
+ */
+export default (props) => {
+  const { 
+    icon = 'tray',
+    title = 'No Data',
+    message = 'Nothing to display',
+    actionText = null,
+    onAction = null
+  } = props;
+  
+  return $render;
+}
+</script>

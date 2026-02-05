@@ -1,0 +1,493 @@
+<template>
+  <div class="page" data-name="student-details">
+    <!-- Navbar -->
+    <div class="navbar">
+      <div class="navbar-bg"></div>
+      <div class="navbar-inner">
+        <div class="left">
+          <a href="/students/" class="link back">
+            <i class="icon material-icons">arrow_back</i>
+            <span>Back</span>
+          </a>
+        </div>
+        <div class="title">Student Details</div>
+        <div class="right">
+          <a href="#" class="link icon-only" @click="${handleEdit}">
+            <i class="icon material-icons">edit</i>
+          </a>
+          <a href="#" class="link icon-only" @click="${handleMore}">
+            <i class="icon material-icons">more_vert</i>
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <!-- Page Content -->
+    <div class="page-content">
+      ${loading ? $h`
+        <${LoadingSpinner} is-visible=${true} />
+      ` : student ? $h`
+        <!-- Student Profile Card -->
+        <div class="block">
+          <div class="card card--elevated p-5 text-center">
+            ${photoUrl ? $h`
+              <img src="${photoUrl}" 
+                   style="width: 120px; height: 120px; border-radius: 50%; object-fit: cover; margin: 0 auto; border: 4px solid var(--attendance-primary);" 
+                   alt="${student.first_name} ${student.last_name}"
+                   onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
+              <div style="width: 120px; height: 120px; border-radius: 50%; margin: 0 auto; border: 4px solid var(--attendance-primary); background: linear-gradient(135deg, var(--attendance-primary), var(--attendance-secondary)); align-items: center; justify-content: center; color: white; font-size: 48px; font-weight: 600; display: none;">
+                ${student.first_name.charAt(0)}${student.last_name.charAt(0)}
+              </div>
+            ` : $h`
+              <div style="width: 120px; height: 120px; border-radius: 50%; margin: 0 auto; border: 4px solid var(--attendance-primary); background: linear-gradient(135deg, var(--attendance-primary), var(--attendance-secondary)); display: flex; align-items: center; justify-content: center; color: white; font-size: 48px; font-weight: 600;">
+                ${student.first_name.charAt(0)}${student.last_name.charAt(0)}
+              </div>
+            `}
+            <div class="text-2xl font-bold mt-3 color-primary">
+              ${student.first_name} ${student.last_name}
+            </div>
+            <div class="text-base color-secondary mt-1">${student.student_id}</div>
+            <div class="text-sm color-secondary mt-1">${student.course} • Year ${student.year_level}</div>
+            <div class="flex justify-center gap-2 mt-3">
+              <span class="badge badge-${student.status === 'active' ? 'success' : 'error'}">
+                ${student.status.toUpperCase()}
+              </span>
+              ${student.face_encoding ? $h`
+                <span class="badge badge-info">Face Trained</span>
+              ` : $h`
+                <span class="badge badge-warning">No Face Data</span>
+              `}
+            </div>
+          </div>
+        </div>
+
+        <!-- Attendance Statistics -->
+        <div class="block-title">Attendance Statistics</div>
+        <div class="block">
+          <div class="grid grid-cols-3 gap-3">
+            <${StatCard} value="${attendanceStats.total}" label="Total Days" />
+            <${StatCard} value="${attendanceStats.present}" label="Present" />
+            <${StatCard} value="${attendanceStats.percentage}%" label="Attendance" />
+          </div>
+        </div>
+
+        <!-- Quick Actions -->
+        <div class="block">
+          <div class="grid grid-cols-2 gap-3">
+            <button class="button button-fill" @click="${manualCheckIn}">
+              <i class="icon material-icons mr-2">checkmark</i>
+              Manual Check-in
+            </button>
+            <button class="button button-outline" @click="${retrainFace}">
+              <i class="icon material-icons mr-2">sparkles</i>
+              Retrain Face
+            </button>
+          </div>
+        </div>
+
+        <!-- Recent Attendance -->
+        <div class="block-title">Recent Attendance</div>
+        <div class="block">
+          ${recentAttendance.length === 0 ? $h`
+            <${EmptyState} 
+              icon="calendar" 
+              title="No Attendance Records"
+              message="This student has no attendance records yet"
+            />
+          ` : $h`
+            <div class="list list-strong inset">
+              <ul>
+                ${recentAttendance.map(record => $h`
+                  <li class="item-content">
+                    <div class="item-inner">
+                      <div class="item-title">
+                        ${record.date}
+                        <div class="item-footer">
+                          IN: ${record.time_in || '-'} | OUT: ${record.time_out || '-'}
+                        </div>
+                      </div>
+                      <div class="item-after">
+                        <span class="badge badge-${record.status === 'present' ? 'success' : record.status === 'late' ? 'warning' : 'error'}">
+                          ${record.status.toUpperCase()}
+                        </span>
+                      </div>
+                    </div>
+                  </li>
+                `)}
+              </ul>
+            </div>
+            <div class="text-center mt-3">
+              <a href="#" class="link" @click=${viewFullHistory}>View Full Attendance History</a>
+            </div>
+          `}
+        </div>
+
+        <!-- Student Information -->
+        <div class="block-title">Student Information</div>
+        <div class="list list-strong inset">
+          <ul>
+            <li class="item-content">
+              <div class="item-inner">
+                <div class="item-title">
+                  <div class="item-header">Student ID</div>
+                  ${student.student_id}
+                </div>
+              </div>
+            </li>
+            <li class="item-content">
+              <div class="item-inner">
+                <div class="item-title">
+                  <div class="item-header">Full Name</div>
+                  ${student.first_name} ${student.last_name}
+                </div>
+              </div>
+            </li>
+            <li class="item-content">
+              <div class="item-inner">
+                <div class="item-title">
+                  <div class="item-header">Course</div>
+                  ${student.course}
+                </div>
+              </div>
+            </li>
+            <li class="item-content">
+              <div class="item-inner">
+                <div class="item-title">
+                  <div class="item-header">Year Level</div>
+                  ${student.year_level}
+                </div>
+              </div>
+            </li>
+            <li class="item-content">
+              <div class="item-inner">
+                <div class="item-title">
+                  <div class="item-header">Status</div>
+                  ${student.status.charAt(0).toUpperCase() + student.status.slice(1)}
+                </div>
+              </div>
+            </li>
+            <li class="item-content">
+              <div class="item-inner">
+                <div class="item-title">
+                  <div class="item-header">Face Recognition</div>
+                  ${student.face_encoding ? 'Trained and ready' : 'Not trained'}
+                </div>
+              </div>
+            </li>
+            <li class="item-content">
+              <div class="item-inner">
+                <div class="item-title">
+                  <div class="item-header">Created</div>
+                  ${new Date(student.created_at).toLocaleDateString()}
+                </div>
+              </div>
+            </li>
+            <li class="item-content">
+              <div class="item-inner">
+                <div class="item-title">
+                  <div class="item-header">Last Updated</div>
+                  ${new Date(student.updated_at).toLocaleDateString()}
+                </div>
+              </div>
+            </li>
+          </ul>
+        </div>
+
+        <!-- Parent/Guardian Information -->
+        ${student.parent_name || student.parent_contact || student.parent_email ? $h`
+          <div class="block-title">Parent/Guardian Information</div>
+          <div class="list list-strong inset">
+            <ul>
+              ${student.parent_name ? $h`
+                <li class="item-content">
+                  <div class="item-inner">
+                    <div class="item-title">
+                      <div class="item-header">Name</div>
+                      ${student.parent_name}
+                    </div>
+                  </div>
+                </li>
+              ` : ''}
+              ${student.relationship ? $h`
+                <li class="item-content">
+                  <div class="item-inner">
+                    <div class="item-title">
+                      <div class="item-header">Relationship</div>
+                      ${student.relationship}
+                    </div>
+                  </div>
+                </li>
+              ` : ''}
+              ${student.parent_contact ? $h`
+                <li class="item-content">
+                  <div class="item-inner">
+                    <div class="item-title">
+                      <div class="item-header">Contact Number</div>
+                      <a href="tel:${student.parent_contact}" class="external">${student.parent_contact}</a>
+                    </div>
+                  </div>
+                </li>
+              ` : ''}
+              ${student.parent_email ? $h`
+                <li class="item-content">
+                  <div class="item-inner">
+                    <div class="item-title">
+                      <div class="item-header">Email Address</div>
+                      <a href="mailto:${student.parent_email}" class="external">${student.parent_email}</a>
+                    </div>
+                  </div>
+                </li>
+              ` : ''}
+            </ul>
+          </div>
+        ` : ''}
+
+        <!-- Danger Zone -->
+        <div class="block">
+          <button class="button button-fill button-large w-full color-red" @click=${handleDelete}>
+            <i class="icon material-icons mr-2">delete</i>
+            Delete Student
+          </button>
+        </div>
+      ` : $h`
+        <${EmptyState} 
+          icon="warning" 
+          title="Student Not Found"
+          message="The student record could not be loaded"
+        />
+      `}
+    </div>
+  </div>
+</template>
+
+<script>
+import LoadingSpinner from '../../components/LoadingSpinner.f7';
+import StatCard from '../../components/StatCard.f7';
+import EmptyState from '../../components/EmptyState.f7';
+import database from '../../js/utils/database.js';
+import faceDetection from '../../js/utils/faceDetection.js';
+import fileStorage from '../../js/utils/fileStorage.js';
+
+export default (props, { $f7, $f7route, $onMounted, $update, $h }) => {
+  const studentId = $f7route.params.studentId;
+  let student = null;
+  let loading = true;
+  let attendanceStats = { total: 0, present: 0, percentage: 0 };
+  let recentAttendance = [];
+  let photoUrl = null;
+
+  $onMounted(async () => {
+    await loadStudent();
+    await loadAttendanceStats();
+  });
+
+  async function loadStudent() {
+    try {
+      loading = true;
+      $update();
+
+      student = await database.getStudent(studentId);
+      
+      // Parse and validate face encoding
+      if (student && student.face_encoding) {
+        try {
+          const parsed = JSON.parse(student.face_encoding);
+          // Check if it's a valid array with data
+          student.face_encoding = (Array.isArray(parsed) && parsed.length > 0) ? parsed : null;
+        } catch (e) {
+          student.face_encoding = null;
+        }
+      }
+
+      // Load photo from file system
+      if (student && student.photo_path) {
+        try {
+          // Use fileStorage.loadPhoto() to properly handle Cordova file:// URLs
+          photoUrl = await fileStorage.loadPhoto(student.photo_path);
+          if (!photoUrl) {
+            console.warn('Failed to load photo from path:', student.photo_path);
+          }
+        } catch (e) {
+          console.error('Photo load error:', e);
+          photoUrl = null;
+        }
+      }
+
+      loading = false;
+      $update();
+    } catch (error) {
+      console.error('Load student error:', error);
+      loading = false;
+      $update();
+    }
+  }
+
+  async function loadAttendanceStats() {
+    try {
+      const attendance = await database.getStudentAttendance(studentId);
+      recentAttendance = attendance.slice(0, 10).map(r => ({
+        date: r.attendance_date,
+        time_in: r.time_in,
+        time_out: r.time_out,
+        status: r.status
+      }));
+
+      attendanceStats.total = attendance.length;
+      attendanceStats.present = attendance.filter(a => a.status === 'present' || a.status === 'late').length;
+      attendanceStats.percentage = attendanceStats.total > 0 
+        ? Math.round((attendanceStats.present / attendanceStats.total) * 100) 
+        : 0;
+
+      $update();
+    } catch (error) {
+      console.error('Load attendance stats error:', error);
+    }
+  }
+
+  const handleEdit = () => {
+    // Navigate to add page in edit mode
+    $f7.views.main.router.navigate(`/students/add/?studentId=${studentId}`);
+  };
+
+  const handleMore = () => {
+    const actions = [
+      { text: 'Export Attendance', onClick: () => exportAttendance() },
+      { text: 'Update Photo', onClick: () => updatePhoto() },
+      { text: student.status === 'active' ? 'Deactivate' : 'Activate', onClick: () => toggleStatus() },
+      { text: 'Send Email', onClick: () => sendEmail() }
+    ];
+
+    $f7.actions.create({
+      buttons: [...actions, { text: 'Cancel', color: 'red' }]
+    }).open();
+  };
+
+  const manualCheckIn = async () => {
+    try {
+      const result = await database.recordTimeIn(student.id, 1.0);
+      if (result.success) {
+        $f7.toast.create({ text: 'Manual check-in recorded', position: 'center', closeTimeout: 2000 }).open();
+        await loadAttendanceStats();
+      } else {
+        $f7.dialog.alert(result.message, 'Check-in Failed');
+      }
+    } catch (error) {
+      $f7.dialog.alert('Failed to record check-in', 'Error');
+    }
+  };
+
+  const retrainFace = () => {
+    $f7.dialog.alert(
+      'To retrain face recognition, please edit the student and capture a new photo, then train the face model.',
+      'Retrain Face'
+    );
+  };
+
+  const viewFullHistory = () => {
+    $f7.views.main.router.navigate(`/attendance/records/?student=${studentId}`);
+  };
+
+  const handleDelete = () => {
+    $f7.dialog.confirm(
+      `Are you sure you want to delete ${student.first_name} ${student.last_name}? This action cannot be undone.`,
+      'Delete Student',
+      async () => {
+        try {
+          $f7.dialog.preloader('Deleting student...');
+          
+          // Delete student photo from file system first (non-blocking)
+          if (student.photo_path) {
+            try {
+              await fileStorage.deletePhoto(student.photo_path);
+              console.log('✅ Photo deleted:', student.photo_path);
+            } catch (photoError) {
+              console.warn('⚠️ Photo deletion failed (continuing with student deletion):', photoError);
+              // Don't stop - continue with student deletion even if photo fails
+            }
+          }
+          
+          // Convert studentId to integer before deleting
+          await database.deleteStudent(parseInt(studentId, 10));
+          
+          $f7.dialog.close();
+          $f7.toast.create({ text: 'Student deleted', position: 'center', closeTimeout: 2000 }).open();
+          
+          // Navigate back and force page reload
+          setTimeout(() => {
+            $f7.views.main.router.back({ force: true });
+          }, 500);
+        } catch (error) {
+          console.error('❌ Delete student error:', error);
+          console.error('Error details:', {
+            message: error?.message,
+            stack: error?.stack,
+            name: error?.name,
+            studentId: studentId
+          });
+          $f7.dialog.close();
+          
+          const errorMsg = error?.message || error?.toString() || 'Unknown error occurred';
+          $f7.dialog.alert(`Failed to delete student: ${errorMsg}`, 'Delete Error');
+        }
+      }
+    );
+  };
+
+  async function exportAttendance() {
+    $f7.toast.create({ text: 'Exporting attendance...', position: 'center', closeTimeout: 2000 }).open();
+  }
+
+  function updatePhoto() {
+    $f7.dialog.alert('Navigate to edit mode to update photo', 'Update Photo');
+  }
+
+  async function toggleStatus() {
+    const newStatus = student.status === 'active' ? 'inactive' : 'active';
+    await database.updateStudent(student.id, { status: newStatus });
+    student.status = newStatus;
+    $update();
+  }
+
+  function sendEmail() {
+    $f7.dialog.prompt('Enter email address:', 'Send Email', (email) => {
+      $f7.toast.create({ text: 'Email feature coming soon', position: 'center', closeTimeout: 2000 }).open();
+    });
+  }
+
+  return $render;
+}
+</script>
+
+<style scoped>
+.mr-2 {
+  margin-right: var(--space-2);
+}
+
+.mt-1 {
+  margin-top: var(--space-1);
+}
+
+.mt-3 {
+  margin-top: var(--space-3);
+}
+
+.grid {
+  display: grid;
+}
+
+.grid-cols-2 {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.grid-cols-3 {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.gap-2 {
+  gap: var(--space-2);
+}
+
+.gap-3 {
+  gap: var(--space-3);
+}
+</style>

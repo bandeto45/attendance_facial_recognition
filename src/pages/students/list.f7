@@ -1,0 +1,444 @@
+<template>
+  <div class="page" data-name="students-list">
+    <!-- Navbar -->
+    <div class="navbar">
+      <div class="navbar-bg"></div>
+      <div class="navbar-inner">
+        <div class="left">
+          <a href="/recognition/" class="link icon-only">
+            <i class="icon material-icons">arrow_back</i>
+          </a>
+        </div>
+        <div class="title">Students</div>
+        <div class="right">
+          <a href="/students/add/" class="link icon-only">
+            <i class="icon material-icons">add</i>
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <!-- Searchbar -->
+    <form class="searchbar searchbar-inline">
+      <div class="searchbar-inner">
+        <div class="searchbar-input-wrap">
+          <input type="search" placeholder="Search students..." @input=${handleSearch} />
+          <i class="searchbar-icon"></i>
+          <span class="input-clear-button"></span>
+        </div>
+        <span class="searchbar-disable-button">Cancel</span>
+      </div>
+    </form>
+
+    <!-- Page Content -->
+    <div class="page-content">
+      <!-- Filter Chips -->
+      <div class="block">
+        <div class="flex gap-2 flex-wrap">
+          <a href="#" class="chip ${filterStatus === 'all' ? 'chip-outline' : ''}" @click=${() => setFilter('all')}>
+            <div class="chip-label">All (${students.length})</div>
+          </a>
+          <a href="#" class="chip ${filterStatus === 'active' ? 'chip-outline' : ''}" @click=${() => setFilter('active')}>
+            <div class="chip-label">Active (${activeCount})</div>
+          </a>
+          <a href="#" class="chip ${filterStatus === 'inactive' ? 'chip-outline' : ''}" @click=${() => setFilter('inactive')}>
+            <div class="chip-label">Inactive (${inactiveCount})</div>
+          </a>
+        </div>
+      </div>
+
+      <!-- Statistics -->
+      <div class="block">
+        <div class="grid grid-cols-3 gap-3">
+          <${StatCard} value=${students.length} label="Total" />
+          <${StatCard} value=${activeCount} label="Active" />
+          <${StatCard} value=${withEncodingCount} label="With Encoding" />
+        </div>
+      </div>
+
+      <!-- Students List -->
+      <div class="block-title">
+        ${filterStatus === 'all' ? 'All Students' : filterStatus.charAt(0).toUpperCase() + filterStatus.slice(1) + ' Students'} 
+        (${filteredStudents.length})
+      </div>
+      <div class="block">
+        ${loading ? $h`
+          <${LoadingSpinner} is-visible=${true} />
+        ` : filteredStudents.length === 0 ? $h`
+          <${EmptyState} 
+            icon="people" 
+            title="No Students Found"
+            message=${searchQuery ? 'No students match your search' : 'Add your first student to get started'}
+            action-text=${searchQuery ? '' : 'Add Student'}
+            on-action=${() => $f7.views.main.router.navigate('/students/add/')}
+          />
+        ` : filteredStudents.map(student => $h`
+          <div class="student-card" @click=${() => viewStudent(student.id)}>
+            <div class="student-card__photo-placeholder">
+              <i class="icon material-icons">person</i>
+            </div>
+            <div class="student-card__info">
+              <div class="student-card__name">${student.first_name} ${student.last_name}</div>
+              <div class="student-card__details">
+                ${student.student_id} • ${student.course} • Year ${student.year_level}
+              </div>
+              <div class="flex items-center gap-2 mt-2">
+                <span class="badge badge-${student.status === 'active' ? 'success' : 'error'}">
+                  ${student.status.toUpperCase()}
+                </span>
+                ${student.face_encoding ? $h`
+                  <span class="badge badge-info">
+                    <i class="icon material-icons" style="font-size: 10px;">verified_user</i>
+                    Trained
+                  </span>
+                ` : ''}
+              </div>
+            </div>
+            <div class="student-card__actions">
+              <button class="button button-small button-fill" @click=${(e) => editStudent(e, student.id)}>
+                <i class="icon material-icons">edit</i>
+              </button>
+              <button class="button button-small button-fill color-red" @click=${(e) => deleteStudent(e, student)}>
+                <i class="icon material-icons">delete</i>
+              </button>
+            </div>
+          </div>
+        `)}
+      </div>
+
+      <!-- Import Option -->
+      <div class="block">
+        <button class="button button-outline button-large w-full" @click=${handleImport}>
+          <i class="icon material-icons mr-2">get_app</i>
+          Import from Excel/CSV
+        </button>
+      </div>
+    </div>
+
+    <!-- Bottom Toolbar -->
+    <${BottomToolbar} active-tab="students" />
+  </div>
+</template>
+
+<script>
+import BottomToolbar from '../../components/BottomToolbar.f7';
+import StatCard from '../../components/StatCard.f7';
+import EmptyState from '../../components/EmptyState.f7';
+import LoadingSpinner from '../../components/LoadingSpinner.f7';
+import database from '../../js/utils/database.js';
+import fileStorage from '../../js/utils/fileStorage.js';
+
+export default (props, { $f7, $on, $onMounted, $onBeforeUnmount, $update, $store, $h }) => {
+  let students = [];
+  let filteredStudents = [];
+  let searchQuery = '';
+  let filterStatus = 'all';
+  let loading = true;
+  let activeCount = 0;
+  let inactiveCount = 0;
+  let withEncodingCount = 0;
+
+  $onMounted(async () => {
+    await loadStudents();
+  });
+
+  // Reload students when page becomes visible (after returning from details/edit)
+  $on('pageBeforeIn', async () => {
+    await loadStudents();
+  });
+
+  async function loadStudents() {
+    try {
+      loading = true;
+      $update();
+
+      await database.init();
+      
+      // Load all students (photo_path instead of photo_blob)
+      const result = await database.query(
+        'SELECT id, student_id, first_name, last_name, course, year_level, status, photo_path, ' +
+        'CASE WHEN face_encoding IS NOT NULL THEN 1 ELSE 0 END as has_encoding ' +
+        'FROM students ORDER BY last_name, first_name'
+      );
+      
+      // Map students with photo_path
+      students = result.map(s => ({
+        ...s,
+        face_encoding: s.has_encoding ? 'true' : null
+      }));
+      
+      // Calculate counts
+      activeCount = students.filter(s => s.status === 'active').length;
+      inactiveCount = students.filter(s => s.status === 'inactive').length;
+      withEncodingCount = students.filter(s => s.face_encoding).length;
+
+      // Update store
+      $store.dispatch('setStudents', students);
+
+      applyFilters();
+      
+      loading = false;
+      $update();
+    } catch (error) {
+      console.error('Load students error:', error);
+      loading = false;
+      $update();
+    }
+  }
+
+  function applyFilters() {
+    let result = students;
+
+    // Apply status filter
+    if (filterStatus !== 'all') {
+      result = result.filter(s => s.status === filterStatus);
+    }
+
+    // Apply search filter
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      result = result.filter(s => 
+        s.first_name.toLowerCase().includes(query) ||
+        s.last_name.toLowerCase().includes(query) ||
+        s.student_id.toLowerCase().includes(query) ||
+        s.course.toLowerCase().includes(query)
+      );
+    }
+
+    filteredStudents = result;
+  }
+
+  const handleSearch = (e) => {
+    searchQuery = e.target.value;
+    applyFilters();
+    $update();
+  };
+
+  const setFilter = (status) => {
+    filterStatus = status;
+    applyFilters();
+    $update();
+  };
+
+  const viewStudent = (studentId) => {
+    $f7.views.main.router.navigate(`/students/${studentId}/`);
+  };
+
+  const editStudent = (e, studentId) => {
+    e.stopPropagation(); // Prevent card click
+    $f7.views.main.router.navigate(`/students/add/?studentId=${studentId}`);
+  };
+
+  const deleteStudent = async (e, student) => {
+    e.stopPropagation(); // Prevent card click
+    
+    $f7.dialog.confirm(
+      `Are you sure you want to delete ${student.first_name} ${student.last_name}? This action cannot be undone.`,
+      'Delete Student',
+      async () => {
+        try {
+          $f7.dialog.preloader('Deleting student...');
+          
+          // Delete student photo from file system first (non-blocking)
+          if (student.photo_path) {
+            try {
+              await fileStorage.deletePhoto(student.photo_path);
+              console.log('✅ Photo deleted:', student.photo_path);
+            } catch (photoError) {
+              console.warn('⚠️ Photo deletion failed (continuing with student deletion):', photoError);
+              // Don't stop - continue with student deletion even if photo fails
+            }
+          }
+          
+          // Delete student from database
+          await database.deleteStudent(parseInt(student.id, 10));
+          
+          $f7.dialog.close();
+          $f7.toast.create({ 
+            text: 'Student deleted successfully', 
+            position: 'center', 
+            closeTimeout: 2000 
+          }).open();
+          
+          // Reload the student list
+          await loadStudents();
+        } catch (error) {
+          console.error('❌ Delete student error:', error);
+          console.error('Error details:', {
+            message: error?.message,
+            stack: error?.stack,
+            name: error?.name,
+            studentId: student?.id
+          });
+          $f7.dialog.close();
+          
+          const errorMsg = error?.message || error?.toString() || 'Unknown error occurred';
+          $f7.dialog.alert(`Failed to delete student: ${errorMsg}`, 'Delete Error');
+        }
+      }
+    );
+  };
+
+  const handleImport = () => {
+    $f7.dialog.alert(
+      'Import functionality allows you to bulk import students from Excel or CSV files. This feature requires the File plugin.',
+      'Import Students'
+    );
+
+    // In production, implement file picker:
+    // 1. Use cordova-plugin-file-chooser
+    // 2. Parse Excel/CSV using SheetJS
+    // 3. Validate data
+    // 4. Bulk insert to database
+  };
+
+  return $render;
+}
+</script>
+
+<style scoped>
+.navbar {
+  --f7-navbar-bg-color: var(--attendance-primary);
+  --f7-navbar-text-color: white;
+  --f7-navbar-link-color: white;
+}
+
+.navbar .material-icons {
+  color: white;
+}
+
+.searchbar {
+  --f7-searchbar-bg-color: white;
+  --f7-searchbar-input-bg-color: #f5f5f5;
+  --f7-searchbar-input-text-color: var(--attendance-secondary);
+  --f7-searchbar-border-color: #e0e0e0;
+  margin: 0;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+}
+
+.chip {
+  --f7-chip-bg-color: #f5f5f5;
+  --f7-chip-text-color: var(--attendance-secondary);
+}
+
+.chip-outline {
+  --f7-chip-bg-color: var(--attendance-primary);
+  --f7-chip-text-color: white;
+}
+
+.mr-2 {
+  margin-right: var(--space-2);
+}
+
+.mt-2 {
+  margin-top: var(--space-2);
+}
+
+.grid {
+  display: grid;
+}
+
+.grid-cols-3 {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.gap-2 {
+  gap: var(--space-2);
+}
+
+.gap-3 {
+  gap: var(--space-3);
+}
+
+.w-full {
+  width: 100%;
+}
+
+.student-card {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  background: white;
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-2);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.student-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  transform: translateY(-2px);
+}
+
+.student-card__photo {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 3px solid var(--attendance-primary);
+}
+
+.student-card__photo-placeholder {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, var(--attendance-primary), var(--attendance-secondary));
+  border: 3px solid var(--attendance-primary);
+  color: white;
+  font-size: 32px;
+}
+
+.student-card__info {
+  flex: 1;
+  min-width: 0;
+}
+
+.student-card__name {
+  font-size: var(--font-md);
+  font-weight: 600;
+  color: var(--attendance-secondary);
+  margin-bottom: var(--space-1);
+}
+
+.student-card__details {
+  font-size: var(--font-sm);
+  color: #666;
+  margin-bottom: var(--space-1);
+}
+
+.student-card__actions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.badge-success {
+  background: var(--attendance-success);
+  color: white;
+}
+
+.badge-error {
+  background: var(--attendance-error);
+  color: white;
+}
+
+.badge-info {
+  background: var(--attendance-info);
+  color: white;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.items-center {
+  align-items: center;
+}
+
+.flex-wrap {
+  flex-wrap: wrap;
+}
+</style>
