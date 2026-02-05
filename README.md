@@ -538,6 +538,249 @@ async function sendNotification(studentId, status) {
 
 ## 📦 Installation
 
+### First-Time Setup for Beginners
+
+If you're new to **Framework7** and **Cordova**, follow these steps to set up your development environment from scratch.
+
+#### Step 1: Install Node.js and npm
+
+Node.js is required to run JavaScript on your computer and manage packages.
+
+**Windows:**
+1. Download Node.js installer from: https://nodejs.org/
+2. Choose "LTS" (Long Term Support) version
+3. Run the installer and follow the setup wizard
+4. Check "Automatically install necessary tools" option
+
+**macOS:**
+```bash
+# Option 1: Using Homebrew (recommended)
+brew install node
+
+# Option 2: Download installer from https://nodejs.org/
+```
+
+**Linux (Ubuntu/Debian):**
+```bash
+# Install Node.js 18.x
+curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+sudo apt-get install -y nodejs
+```
+
+**Verify Installation:**
+```bash
+node --version    # Should show v18.x.x or higher
+npm --version     # Should show v9.x.x or higher
+```
+
+#### Step 2: Install Framework7 CLI (Optional)
+
+Framework7 CLI helps create and manage Framework7 projects.
+
+```bash
+# Install globally
+npm install -g framework7-cli
+
+# Verify installation
+framework7 --version
+```
+
+> **Note**: This project doesn't require Framework7 CLI since it's already set up. But it's useful for creating new Framework7 projects in the future.
+
+#### Step 3: Install Cordova CLI
+
+Cordova CLI is essential for building mobile apps.
+
+```bash
+# Install globally
+npm install -g cordova
+
+# Verify installation
+cordova --version    # Should show 12.x.x or higher
+```
+
+#### Step 4: Set Up Android Development (For Android Builds)
+
+**4a. Install Java Development Kit (JDK)**
+
+Cordova requires JDK 11 or higher.
+
+**Windows/macOS:**
+```bash
+# Download JDK 11 from:
+# https://www.oracle.com/java/technologies/javase/jdk11-archive-downloads.html
+
+# Or use OpenJDK:
+# Windows: https://adoptium.net/
+# macOS: brew install openjdk@11
+```
+
+**Linux:**
+```bash
+sudo apt-get update
+sudo apt-get install openjdk-11-jdk
+```
+
+**Verify JDK Installation:**
+```bash
+java -version    # Should show version 11.x.x or higher
+javac -version   # Java compiler version
+```
+
+**4b. Install Android Studio**
+
+Android Studio includes the Android SDK and build tools.
+
+1. **Download Android Studio**: https://developer.android.com/studio
+2. **Install Android Studio**:
+   - Windows/Mac: Run the installer
+   - Linux: Extract and run `studio.sh`
+3. **Open Android Studio** and complete the setup wizard
+4. **Install Android SDK**:
+   - Go to: `Tools → SDK Manager`
+   - Select: `Android SDK Platform 30` (or higher)
+   - Select: `Android SDK Build-Tools`
+   - Select: `Android SDK Command-line Tools`
+   - Click "Apply" to install
+
+**4c. Set Environment Variables**
+
+**Windows:**
+```bash
+# Add to System Environment Variables:
+# Variable: ANDROID_HOME
+# Value: C:\Users\YourUsername\AppData\Local\Android\Sdk
+
+# Add to Path:
+# %ANDROID_HOME%\platform-tools
+# %ANDROID_HOME%\tools
+# %ANDROID_HOME%\cmdline-tools\latest\bin
+```
+
+**macOS/Linux:**
+```bash
+# Add to ~/.bash_profile or ~/.zshrc
+export ANDROID_HOME=$HOME/Library/Android/sdk
+export PATH=$PATH:$ANDROID_HOME/platform-tools
+export PATH=$PATH:$ANDROID_HOME/tools
+export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin
+
+# Reload shell configuration
+source ~/.bash_profile  # or source ~/.zshrc
+```
+
+**Verify Android Setup:**
+```bash
+echo $ANDROID_HOME           # Should show Android SDK path
+adb --version                # Android Debug Bridge
+sdkmanager --list | head -10 # List installed SDK packages
+```
+
+#### Step 5: Set Up iOS Development (Mac Only)
+
+**5a. Install Xcode**
+
+1. Open **App Store** on your Mac
+2. Search for "Xcode"
+3. Click "Get" to install (large download ~12GB)
+4. Wait for installation to complete (30-60 minutes)
+
+**5b. Install Xcode Command Line Tools**
+
+```bash
+# Install command line tools
+xcode-select --install
+
+# Accept Xcode license
+sudo xcodebuild -license accept
+```
+
+**5c. Install CocoaPods**
+
+CocoaPods is a dependency manager for iOS projects.
+
+```bash
+# Install CocoaPods
+sudo gem install cocoapods
+
+# Verify installation
+pod --version
+```
+
+**Verify iOS Setup:**
+```bash
+xcodebuild -version  # Should show Xcode version
+pod --version        # Should show CocoaPods version
+```
+
+#### Step 6: Install Git (Version Control)
+
+Git is needed to clone this repository and manage code.
+
+**Windows:**
+```bash
+# Download Git for Windows:
+# https://git-scm.com/download/win
+
+# Or install via Chocolatey:
+choco install git
+```
+
+**macOS:**
+```bash
+# Install via Homebrew
+brew install git
+
+# Or download from: https://git-scm.com/download/mac
+```
+
+**Linux:**
+```bash
+sudo apt-get update
+sudo apt-get install git
+```
+
+**Configure Git:**
+```bash
+# Set your name and email
+git config --global user.name "Your Name"
+git config --global user.email "your.email@example.com"
+
+# Verify configuration
+git config --list
+```
+
+#### Step 7: Verify Complete Setup
+
+Run this checklist to ensure everything is installed:
+
+```bash
+# Node.js & npm
+node --version     # ✅ v18.x.x or higher
+npm --version      # ✅ v9.x.x or higher
+
+# Cordova
+cordova --version  # ✅ 12.x.x or higher
+
+# Git
+git --version      # ✅ 2.x.x or higher
+
+# Java (for Android)
+java -version      # ✅ 11.x.x or higher
+
+# Android SDK (for Android)
+echo $ANDROID_HOME # ✅ Should show SDK path
+adb --version      # ✅ Android Debug Bridge
+
+# Xcode (for iOS - Mac only)
+xcodebuild -version # ✅ Xcode 14+ (Mac only)
+pod --version      # ✅ CocoaPods (Mac only)
+```
+
+**If all commands show proper versions, you're ready to proceed! 🎉**
+
+---
+
 ### Prerequisites
 
 ```bash
