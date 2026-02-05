@@ -39,7 +39,7 @@
 
 ### Key Highlights
 - **Recognition Speed**: 2-3 seconds per student
-- **Accuracy**: 70%+ confidence threshold with Euclidean distance matching
+- **Accuracy**: 60% confidence threshold (0.6) with Euclidean distance matching
 - **Privacy**: All data stays on device, no cloud servers
 - **Cross-Platform**: Android & iOS support
 - **Offline-First**: Works without internet connection
@@ -52,15 +52,17 @@
 - Real-time face detection using TinyFaceDetector model
 - 128-dimensional face descriptor computation
 - Multiple face detection in single frame
-- Confidence scoring (70%+ required for match)
-- Camera controls (front/back switch, flash toggle)
+- Confidence scoring (60% threshold, configurable)
+- Front camera only (hardcoded to `facingMode: 'user'`)
+- Video stream with overlay canvas for bounding boxes
 
 ### 2. **Smart Attendance Recording**
-- **Automatic time-in/time-out** when face is recognized
-- **Enforced alternating sequence**: Forces time-out before allowing next time-in
+- **Manual mode selection**: User chooses time-in or time-out mode before recognition
+- **Face recognition validation**: Detects and validates student identity (60% confidence threshold)
+- **Enforced alternating sequence**: Validates that time-out exists before allowing next time-in
 - **Unlimited daily cycles**: Students can check in/out multiple times per day
 - **Duplicate prevention**: 5-second window between same student detections
-- **Real-time validation**: Prevents multiple check-ins without check-out
+- **Real-time validation**: Prevents multiple check-ins without check-out via database queries
 
 ### 3. **Parent Notifications**
 - Automatic SMS notifications via `cordova-sms-plugin`
@@ -70,8 +72,7 @@
 
 ### 4. **Student Management**
 - Complete CRUD operations (Create, Read, Update, Delete)
-- Face photo capture using camera preview
-- Bulk import from CSV/Excel files
+- Face photo capture using getUserMedia camera
 - Search and filter by name, ID, course, year level
 - Active/inactive status tracking
 
@@ -84,9 +85,9 @@
 
 ### 6. **Security & Privacy**
 - All data stored locally in SQLite
-- Face encodings encrypted
-- User authentication (Admin/Operator roles)
-- Audit trail for modifications
+- Face encodings stored as JSON strings in database
+- User authentication with role selection (Admin/Operator roles)
+- Local data storage only (no cloud transmission)
 - No internet required (maximum privacy)
 
 ---
