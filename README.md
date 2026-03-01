@@ -1,15 +1,15 @@
 # 📱 Attendance Facial Recognition System
 
-> A mobile application for automated student attendance tracking using real-time facial recognition technology. Built with Framework7 v9 + Cordova, powered by TensorFlow.js for local face recognition processing.
+> A mobile application for automated student attendance tracking using real-time facial recognition technology. Built with Framework7 v9 + Cordova, powered by face-api.js / TensorFlow.js for fully offline, on-device face recognition.
 
 [![Framework7](https://img.shields.io/badge/Framework7-v9.0.2-blue)](https://framework7.io)
 [![Cordova](https://img.shields.io/badge/Cordova-12.x-green)](https://cordova.apache.org)
-[![TensorFlow.js](https://img.shields.io/badge/TensorFlow.js-Face--API-orange)](https://github.com/vladmandic/face-api)
+[![TensorFlow.js](https://img.shields.io/badge/face--api.js-Local%20AI-orange)](https://github.com/vladmandic/face-api)
 [![License](https://img.shields.io/badge/License-Proprietary-red)](LICENSE)
 
 ---
 
-## 📋 Table of Contents
+## Table of Contents
 
 1. [Overview](#overview)
 2. [Features](#features)
@@ -17,1838 +17,484 @@
 4. [Project Structure](#project-structure)
 5. [Database Schema](#database-schema)
 6. [Application Flow](#application-flow)
-7. [Installation](#installation)
-8. [Usage](#usage)
-9. [Build & Deploy](#build--deploy)
-10. [Plugins & Libraries](#plugins--libraries)
-11. [Development Guide](#development-guide)
-12. [Troubleshooting](#troubleshooting)
+7. [Routes](#routes)
+8. [State Management](#state-management)
+9. [Installation](#installation)
+10. [Usage & Build](#usage--build)
+11. [Cordova Plugins](#cordova-plugins)
+12. [Development Guide](#development-guide)
+13. [Troubleshooting](#troubleshooting)
 
 ---
 
-## 🎯 Overview
+## Overview
 
-**Smart Attendance System** replaces traditional manual attendance methods with automated facial recognition. The system:
+The **Attendance Facial Recognition System** is a fully offline, privacy-first mobile application that automates student attendance using live camera-based face recognition. All processing — face detection, recognition, and data storage — happens locally on the device without any backend server or internet connection.
 
-- ✅ **Detects and recognizes** student faces in real-time using TensorFlow.js
-- ✅ **Records attendance** automatically (time-in/time-out with unlimited cycles)
-- ✅ **Sends SMS notifications** to parents when students arrive/leave school
-- ✅ **Stores data locally** in SQLite database (100% offline operation)
-- ✅ **Exports reports** to CSV/PDF for easy sharing
-- ✅ **Enforces validation** - prevents duplicate check-ins without time-out
-
-### Key Highlights
-- **Recognition Speed**: 2-3 seconds per student
-- **Accuracy**: 60% confidence threshold (0.6) with Euclidean distance matching
-- **Privacy**: All data stays on device, no cloud servers
-- **Cross-Platform**: Android & iOS support
-- **Offline-First**: Works without internet connection
+| Metric | Value |
+|--------|-------|
+| App ID | `proj.att.fc` |
+| Version | `1.0.0` |
+| Framework | Framework7 v9.0.2 |
+| Minimum Android | API 24 (Android 7.0) |
+| Minimum iOS | iOS 15.0 |
+| Face Models | 3 (ssdMobilenetv1, faceLandmark68Net, faceRecognitionNet) |
+| Local AI Engine | face-api.js (TensorFlow.js backend) |
+| Database | SQLite (cordova-sqlite-storage) |
 
 ---
 
-## ✨ Features
+## Features
 
-### 1. **Live Facial Recognition**
-- Real-time face detection using TinyFaceDetector model
-- 128-dimensional face descriptor computation
-- Multiple face detection in single frame
-- Confidence scoring (60% threshold, configurable)
-- Front camera only (hardcoded to `facingMode: 'user'`)
-- Video stream with overlay canvas for bounding boxes
+### 1. Live Facial Recognition
+- Real-time camera feed with face detection overlay (bounding boxes + name labels)
+- Automatic student identification using on-device TensorFlow.js models
+- Confidence score display (minimum threshold: 0.6 / 60%)
+- Multi-face detection support in a single frame
+- 5-second duplicate detection window prevents rapid re-triggers
 
-### 2. **Smart Attendance Recording**
-- **Manual mode selection**: User chooses time-in or time-out mode before recognition
-- **Face recognition validation**: Detects and validates student identity (60% confidence threshold)
-- **Enforced alternating sequence**: Validates that time-out exists before allowing next time-in
-- **Unlimited daily cycles**: Students can check in/out multiple times per day
-- **Duplicate prevention**: 5-second window between same student detections
-- **Real-time validation**: Prevents multiple check-ins without check-out via database queries
+### 2. Attendance Recording (Enforced Alternating Sequence)
+- Automatic **time-in** on first recognition each cycle
+- Automatic **time-out** on next recognition if no time-out exists yet
+- Unlimited daily cycles (time-in → time-out → time-in → …)
+- SQL column aliases (`a.id as attendance_id`, `a.student_id as student_db_id`) prevent JOIN name collisions
+- Comprehensive console logging with emoji indicators (`🆕 📋 ⏰ ✅ ❌`)
 
-### 3. **Parent Notifications**
-- Automatic SMS notifications via `cordova-sms-plugin`
-- Silent background sending (no SMS composer popup)
-- Message format: "Your child [Name] has arrived/left school at [Time] on [Date]"
-- Permission-based system with graceful fallbacks
+### 3. Role-Based Access Control
+- **Admin**: Full access — Dashboard, Recognition, Attendance Records, Students, Settings
+- **Operator**: Limited — Recognition tab only + minimal Settings
+- `BottomToolbar.f7` renders tabs conditionally based on `isAdmin` store flag
+- `.page-previous, .page-on-left` CSS rule hides stacked toolbars during F7 page transitions
 
-### 4. **Student Management**
-- Complete CRUD operations (Create, Read, Update, Delete)
-- Face photo capture using getUserMedia camera
-- Search and filter by name, ID, course, year level
-- Active/inactive status tracking
+### 4. Schedule Settings & Live Verification Strip
+- Configurable school schedule: AM In/Out + PM In/Out times
+- Live "Schedule Strip" on Attendance Records shows current period in real time
+- Settings stored in SQLite `settings` table, loaded via `store.js` on app start
 
-### 5. **Attendance Reports**
-- Daily/weekly/monthly attendance summaries
-- Individual student attendance history
-- Date range filtering
-- Export to CSV/PDF/Excel formats
-- Automatic file opening in native viewers
+### 5. Student Database Management
+- Full CRUD: add, edit, delete students
+- Face encoding storage and update (retrain per student)
+- CSV/Excel bulk import via SheetJS
+- Search and filter by name, course, year level
 
-### 6. **Security & Privacy**
-- All data stored locally in SQLite
-- Face encodings stored as JSON strings in database
-- User authentication with role selection (Admin/Operator roles)
-- Local data storage only (no cloud transmission)
-- No internet required (maximum privacy)
+### 6. Attendance Reports & Export
+- Daily / date-range attendance views with CSS Grid date-nav (← date → Today)
+- Export to CSV, PDF, Excel
+- Email reports via `cordova-plugin-email-composer`
+- Attendance statistics (present count, absent count, late, half-day)
 
----
+### 7. SMS Parent Notifications
+- Auto-send SMS on time-in and time-out via `cordova-sms-plugin`
+- Silent background send (`android.intent: ''`) — no SMS composer popup
+- Graceful fallback when SMS permission is denied
 
-## 🛠️ Technology Stack
-
-### Frontend Framework
-- **Framework7 v9.0.2** - Mobile app framework with iOS & Material Design themes
-- **Cordova 12.x** - Cross-platform mobile app wrapper
-- **Vite 7.3.1** - Fast build tool and dev server
-- **LESS** - CSS preprocessor for styling
-
-### Face Recognition
-- **@vladmandic/face-api v1.7.15** - TensorFlow.js-based face detection & recognition
-- **TensorFlow.js** - Machine learning framework (runs locally)
-- **Models Used**:
-  - Tiny Face Detector (fast & lightweight)
-  - Face Landmark 68 Model (facial landmarks)
-  - Face Recognition Model (128D face descriptors)
-
-### Database
-- **cordova-sqlite-storage** - Native SQLite database for Cordova apps
-- **Schema**: 2 tables (students, attendance)
-
-### File Processing
-- **PapaParse v5.5.3** - CSV parsing for bulk imports
-- **XLSX v0.18.5** - Excel file reading/writing
-- **PDFKit v0.17.2** - PDF generation for reports
-
-### UI Components
-- **Swiper v12.0.3** - Touch slider/carousel
-- **Skeleton Elements v4.0.1** - Loading placeholders
-- **Material Icons v1.13.14** - Icon library
-- **Framework7 Icons v5.0.5** - Additional icons
+### 8. Offline-First Architecture
+- 100% local: no backend, no cloud API calls required
+- SQLite for all data (students, attendance, users, settings)
+- Optional Google Drive / Dropbox backup via Cordova File plugin
+- Works in airplane mode
 
 ---
 
-## 📁 Project Structure
+## Technology Stack
+
+### Frontend
+| Technology | Version | Purpose |
+|-----------|---------|---------|
+| Framework7 | v9.0.2 | UI framework, routing, components |
+| Vite | v5.x | Build tool & dev server |
+| LESS | — | CSS preprocessor (CSS variables + golden ratio scale) |
+| face-api.js | Latest | Face detection & recognition (TensorFlow.js) |
+
+### Face Recognition Models
+| Model | Purpose |
+|-------|---------|
+| ssdMobilenetv1 | Face detection in frame |
+| faceLandmark68Net | 68-point facial landmark detection |
+| faceRecognitionNet | 128-dimension face descriptor |
+
+### Database & Storage
+| Plugin | Purpose |
+|--------|---------|
+| cordova-sqlite-storage | Primary local database (4 tables) |
+| cordova-plugin-file | File read/write for exports and backups |
+| cordova-plugin-file-opener2 | Open exported CSV/PDF from device |
+
+---
+
+## Project Structure
 
 ```
 attendance_facial_recognition/
-├── src/                              # Source code
-│   ├── index.html                    # Main HTML entry
-│   ├── app.f7                        # Root Framework7 component
-│   │
-│   ├── pages/                        # Framework7 Router Components (.f7)
+├── src/
+│   ├── index.html
+│   ├── app.f7                        # Root Framework7 app component
+│   ├── js/
+│   │   ├── app.js                    # App initialisation & theme config
+│   │   ├── routes.js                 # All 10 application routes
+│   │   ├── store.js                  # Framework7 Store (global state)
+│   │   ├── cordova-app.js            # Cordova deviceready handler
+│   │   ├── framework7-custom.js      # F7 custom build options
+│   │   └── utils/
+│   │       ├── database.js           # SQLite schema, queries, CRUD helpers
+│   │       ├── face-recognition.js   # face-api.js model loading & matching
+│   │       ├── camera.js             # Camera preview management
+│   │       ├── notifications.js      # SMS & local notifications
+│   │       ├── export.js             # CSV / PDF / Excel export
+│   │       ├── backup.js             # Cloud backup helpers
+│   │       └── constants.js          # APP_CONFIG, roles, defaults
+│   ├── pages/
 │   │   ├── home.f7                   # Login page
-│   │   ├── recognition.f7            # Recognition dashboard
-│   │   ├── camera.f7                 # Live camera recognition (MAIN)
-│   │   ├── 404.f7                    # Not found page
-│   │   │
-│   │   ├── attendance/               # Attendance pages
-│   │   │   ├── records.f7            # Attendance records list
-│   │   │   ├── details.f7            # Individual record details
-│   │   │   └── reports.f7            # Reports & analytics
-│   │   │
-│   │   └── students/                 # Student management pages
-│   │       ├── list.f7               # Student list with search/filter
-│   │       ├── add.f7                # Add new student form
-│   │       └── details.f7            # Student profile & history
-│   │
-│   ├── components/                   # Reusable .f7 Components
-│   │   ├── BottomToolbar.f7          # Bottom navigation bar
+│   │   ├── recognition.f7            # Live recognition screen (primary)
+│   │   ├── camera.f7                 # Camera capture / face training
+│   │   ├── 404.f7                    # Not-found page
+│   │   ├── attendance/
+│   │   │   ├── records.f7            # Attendance records + CSS Grid date-nav
+│   │   │   └── details.f7            # Individual record detail
+│   │   └── students/
+│   │       ├── list.f7               # Student list (search + filter)
+│   │       ├── add.f7                # Add new student + face capture
+│   │       ├── edit.f7               # Edit student info
+│   │       ├── details.f7            # Student detail + attendance history
+│   │       └── import.f7             # Bulk CSV/Excel import
+│   ├── components/
+│   │   ├── BottomToolbar.f7          # Role-based bottom tab navigation
 │   │   ├── AttendanceCard.f7         # Attendance entry card
 │   │   ├── StudentCard.f7            # Student profile card
-│   │   ├── StatCard.f7               # Statistics card widget
+│   │   ├── StatCard.f7               # Stat summary card
 │   │   ├── EmptyState.f7             # Empty state placeholder
-│   │   └── LoadingSpinner.f7         # Loading spinner
-│   │
-│   ├── js/                           # JavaScript files
-│   │   ├── app.js                    # App initialization & config
-│   │   ├── routes.js                 # Route definitions
-│   │   ├── store.js                  # Framework7 Store (state mgmt)
-│   │   ├── cordova-app.js            # Cordova-specific initialization
-│   │   ├── framework7-custom.js      # Custom Framework7 components
-│   │   │
-│   │   └── utils/                    # Utility modules
-│   │       ├── database.js           # SQLite CRUD operations
-│   │       ├── faceDetection.js      # Face detection logic
-│   │       ├── face-recognition.js   # Face recognition & matching
-│   │       ├── notifications.js      # SMS/notification service
-│   │       ├── export.js             # Export to CSV/PDF/Excel
-│   │       ├── fileStorage.js        # File system operations
-│   │       ├── camera.js             # Camera utilities
-│   │       ├── backup.js             # Backup/restore utilities
-│   │       ├── storage.js            # Local storage wrapper
-│   │       ├── modelLoader.js        # Load face recognition models
-│   │       ├── seedDemoData.js       # Demo data seeder
-│   │       └── constants.js          # App constants & config
-│   │
-│   ├── css/                          # Stylesheets
-│   │   ├── app.less                  # Main styles (CSS variables, golden ratio)
+│   │   └── LoadingSpinner.f7         # Loading indicator
+│   ├── css/
+│   │   ├── app.less                  # CSS variables, golden ratio scale, global rules
 │   │   ├── framework7-custom.less    # Framework7 theme overrides
-│   │   ├── components.css            # Component-specific styles
-│   │   └── icons.css                 # Icon fonts
-│   │
-│   ├── assets/                       # Static assets
-│   │   ├── images/                   # App images
-│   │   ├── icons/                    # App icons
-│   │   └── models/                   # Face recognition models
-│   │       ├── tiny_face_detector_model-weights_manifest.json
-│   │       ├── face_landmark_68_model-weights_manifest.json
-│   │       └── face_recognition_model-weights_manifest.json
-│   │
-│   └── fonts/                        # Icon fonts (Material Icons, Framework7 Icons)
-│
-├── cordova/                          # Cordova project folder
-│   ├── config.xml                    # Cordova configuration
-│   ├── platforms/                    # Platform-specific code (Android, iOS)
+│   │   ├── components.css            # Compiled component styles
+│   │   └── icons.css                 # Material Icons setup
+│   └── assets/
+│       ├── images/
+│       ├── icons/
+│       └── models/                   # face-api.js model weights
+├── cordova/
+│   ├── config.xml                    # App ID, permissions, plugin declarations
 │   ├── plugins/                      # Installed Cordova plugins
-│   ├── www/                          # Built app files (auto-generated)
-│   └── res/                          # Resources (icons, splash screens)
-│
-├── build/                            # Build scripts
-│   └── build-cordova.js              # Cordova build automation
-│
-├── public/                           # Public assets (copied to build)
-├── package.json                      # npm dependencies
-├── vite.config.js                    # Vite bundler configuration
-├── framework7.json                   # Framework7 CLI config
-└── README.md                         # This file
+│   ├── platforms/android/
+│   ├── platforms/ios/
+│   └── www/                          # Compiled Vite output (copy target)
+├── build/build-cordova.js
+├── vite.config.js
+├── framework7.json
+├── package.json
+└── README.md
 ```
 
 ---
 
-## 🗄️ Database Schema
+## Database Schema
 
-### SQLite Database: `attendance.db`
+All data is stored locally in SQLite via `cordova-sqlite-storage`. Initialised in `src/js/utils/database.js`.
 
-#### **Table: `students`**
-Stores student profile information and face encodings.
+### Table: `students`
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | INTEGER PK AUTOINCREMENT | Internal row ID |
+| `student_id` | TEXT UNIQUE | School-assigned ID (e.g. `2024-001`) |
+| `first_name` | TEXT | — |
+| `last_name` | TEXT | — |
+| `course` | TEXT | Department / programme |
+| `year_level` | TEXT | e.g. `1st Year` |
+| `parent_contact` | TEXT | Phone number for SMS notifications |
+| `photo_path` | TEXT | Path to stored student photo |
+| `face_encoding` | TEXT | JSON-serialised 128-dim face descriptor |
+| `is_active` | INTEGER | `1` = active, `0` = inactive |
+| `created_at` | DATETIME | Auto-set on INSERT |
+| `updated_at` | DATETIME | Auto-updated on UPDATE |
 
+### Table: `attendance`
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | INTEGER PK AUTOINCREMENT | `a.id as attendance_id` in JOINs |
+| `student_id` | INTEGER FK → `students.id` | `a.student_id as student_db_id` in JOINs |
+| `attendance_date` | TEXT | `YYYY-MM-DD` |
+| `time_in` | TEXT | `HH:MM:SS` |
+| `time_out` | TEXT | `HH:MM:SS` (NULL until check-out) |
+| `status` | TEXT | `present`, `late`, `half-day`, `absent` |
+| `confidence` | REAL | Recognition confidence 0–1 |
+| `photo_path` | TEXT | Snapshot at recognition time |
+| `created_at` | DATETIME | Auto-set on INSERT |
+
+### Table: `users`
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | INTEGER PK AUTOINCREMENT | — |
+| `username` | TEXT UNIQUE | Login username |
+| `password` | TEXT | Hashed password |
+| `role` | TEXT | `admin` or `operator` |
+| `is_active` | INTEGER | `1` = active |
+| `created_at` | DATETIME | — |
+
+### Table: `settings`
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | INTEGER PK AUTOINCREMENT | — |
+| `key` | TEXT UNIQUE | Setting name (e.g. `schedule_am_in`) |
+| `value` | TEXT | Setting value |
+| `updated_at` | DATETIME | — |
+
+### Indexes
 ```sql
-CREATE TABLE students (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  student_id TEXT UNIQUE NOT NULL,           -- Student ID (e.g., "2021-001")
-  first_name TEXT NOT NULL,
-  last_name TEXT NOT NULL,
-  course TEXT,
-  year_level INTEGER,
-  photo_path TEXT,                            -- Path to face photo
-  face_encoding TEXT,                         -- JSON array of 128D descriptor
-  status TEXT DEFAULT 'active',               -- 'active' or 'inactive'
-  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-  updated_at TEXT DEFAULT CURRENT_TIMESTAMP
-);
-```
-
-#### **Table: `attendance`**
-Stores attendance records with time-in and time-out timestamps.
-
-```sql
-CREATE TABLE attendance (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  student_id INTEGER NOT NULL,               -- Foreign key to students.id
-  attendance_date TEXT NOT NULL,             -- Date (YYYY-MM-DD)
-  time_in TEXT,                              -- Time-in (HH:MM:SS)
-  time_out TEXT,                             -- Time-out (HH:MM:SS) or NULL
-  status TEXT DEFAULT 'present',             -- 'present', 'late', 'absent'
-  confidence REAL,                           -- Recognition confidence (0-100)
-  photo_path TEXT,                           -- Optional photo at check-in
-  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (student_id) REFERENCES students(id)
-);
-```
-
-### Database Operations (CRUD)
-
-#### **Students Table**
-
-```javascript
-// CREATE - Add new student
-await db.addStudent({
-  student_id: '2021-001',
-  first_name: 'John',
-  last_name: 'Doe',
-  course: 'Computer Science',
-  year_level: 3,
-  photo_path: '/path/to/photo.jpg',
-  face_encoding: JSON.stringify([...128D_array]),
-  status: 'active'
-});
-
-// READ - Get all students
-const students = await db.getAllStudents();
-
-// READ - Get single student
-const student = await db.getStudent(studentId);
-
-// READ - Get students with face encodings
-const activeStudents = await db.getStudentsWithEncodings();
-
-// UPDATE - Update student info
-await db.updateStudent(studentId, {
-  course: 'Information Technology',
-  year_level: 4
-});
-
-// UPDATE - Update face encoding
-await db.updateFaceEncoding(studentId, encodingArray);
-
-// DELETE - Delete student
-await db.deleteStudent(studentId);
-
-// SEARCH - Search students by name/ID
-const results = await db.searchStudents('John');
-```
-
-#### **Attendance Table**
-
-```javascript
-// CREATE - Record time-in
-await db.recordTimeIn(studentId, confidence, photoPath);
-
-// CREATE/UPDATE - Record time-out
-await db.recordTimeOut(studentId, confidence, photoPath);
-
-// READ - Get today's attendance
-const todayRecords = await db.getTodayAttendance();
-
-// READ - Get attendance by date
-const records = await db.getAttendanceByDate('2026-02-05');
-
-// READ - Get attendance by date range
-const records = await db.getAttendanceByDateRange('2026-02-01', '2026-02-28');
-
-// READ - Get student's attendance history
-const history = await db.getStudentAttendanceHistory(studentId, startDate, endDate);
-
-// READ - Get attendance summary
-const summary = await db.getAttendanceSummary(date);
-
-// UPDATE - Update attendance record
-await db.updateAttendanceRecord(recordId, { status: 'late' });
-
-// DELETE - Delete attendance record
-await db.deleteAttendanceRecord(recordId);
-```
-
-### Database Initialization Flow
-
-```javascript
-// On app startup
-const db = new Database();
-
-// Initialize database
-await db.init();
-
-// Create tables if not exist
-await db.createTables();
-
-// Optional: Seed demo data (development only)
-await seedDemoData(db);
+CREATE INDEX IF NOT EXISTS idx_attendance_date     ON attendance(attendance_date);
+CREATE INDEX IF NOT EXISTS idx_attendance_student  ON attendance(student_id);
+CREATE INDEX IF NOT EXISTS idx_students_active     ON students(is_active);
 ```
 
 ---
 
-## 🔄 Application Flow
+## Application Flow
 
-### Complete User Journey
-
+### Startup
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                    APP STARTUP                               │
-└─────────────────────────────────────────────────────────────┘
-                            │
-                            ▼
-┌─────────────────────────────────────────────────────────────┐
-│  1. Device Ready Event                                       │
-│     - Initialize Cordova plugins                             │
-│     - Load SQLite database                                   │
-│     - Request permissions (SMS, Camera, Audio)               │
-└─────────────────────────────────────────────────────────────┘
-                            │
-                            ▼
-┌─────────────────────────────────────────────────────────────┐
-│  2. Login Page (home.f7)                                     │
-│     - User authentication                                    │
-│     - Role selection (Admin/Operator)                        │
-└─────────────────────────────────────────────────────────────┘
-                            │
-                            ▼
-┌─────────────────────────────────────────────────────────────┐
-│  3. Main Dashboard                                           │
-│     - Navigation to: Recognition / Attendance / Students     │
-│     - No settings page (all controls in-page)                │
-└─────────────────────────────────────────────────────────────┘
-                            │
-                ┌───────────┼───────────┐
-                │           │           │
-                ▼           ▼           ▼
-        ┌────────────┐ ┌────────────┐ ┌────────────┐
-        │Recognition │ │ Attendance │ │  Students  │
-        │   Page     │ │   Records  │ │    List    │
-        └────────────┘ └────────────┘ └────────────┘
-                │
-                ▼
-┌─────────────────────────────────────────────────────────────┐
-│  4. Camera Page (camera.f7) - MAIN FEATURE                  │
-│                                                              │
-│  a) Start Camera                                             │
-│     - Request camera permission                              │
-│     - Initialize camera via getUserMedia API                 │
-│     - Set camera resolution & facing mode                    │
-│                                                              │
-│  b) Load Face Recognition Models                            │
-│     - Load TinyFaceDetector model                            │
-│     - Load FaceLandmark68 model                              │
-│     - Load FaceRecognition model                             │
-│                                                              │
-│  c) Face Detection Loop (runs continuously)                 │
-│     - Capture frame from video stream                        │
-│     - Detect faces using TinyFaceDetector                    │
-│     - Extract facial landmarks (68 points)                   │
-│     - Compute 128D face descriptor                           │
-│                                                              │
-│  d) Face Recognition & Matching                             │
-│     - Compare descriptor with database                       │
-│     - Calculate Euclidean distance                           │
-│     - Match if distance < 0.6 threshold                      │
-│     - Return student info if match found                     │
-│                                                              │
-│  e) Attendance Validation                                   │
-│     - Query today's attendance records                       │
-│     - Check if student has records today                     │
-│     - Apply validation rules (see below)                     │
-│                                                              │
-│  f) Record Attendance                                       │
-│     - Insert/Update attendance record in SQLite              │
-│     - Send SMS notification to parent                        │
-│     - Display success toast to user                          │
-│     - Continue detection loop                                │
-└─────────────────────────────────────────────────────────────┘
+1. Vite serves index.html → loads app.js
+2. Framework7 initialises with routes from routes.js
+3. Auto-detect dark/light theme (prefers-color-scheme)
+4. deviceready fires → Cordova plugins available
+5. SQLite database initialised (tables created if not exist)
+6. face-api.js models loaded from assets/models/
+7. Store hydrated: auth, schedule settings, student cache
+8. Navigate to /home/ (login page)
 ```
 
-### Attendance Validation Logic
+### Login → Role-Based Routing
+```
+/home/ → enter credentials → db.authenticateUser()
+  Admin    → /recognition/  (BottomToolbar: Recognition + Attendance + Students)
+  Operator → /recognition/  (BottomToolbar: Recognition only)
+```
 
-**Critical: Enforced Alternating Time-In/Time-Out Sequence**
+### Live Recognition Loop
+```
+Camera preview starts (cordova-plugin-camera-preview)
+→ Capture frame every ~300ms
+→ face-api.js: detectAllFaces() + computeFaceDescriptor()
+→ Compare descriptor against stored face_encoding values
+→ If confidence ≥ 0.6 AND not in 5s duplicate window:
+    getTodayAttendance() with aliased JOIN
+    studentRecords = records.filter(r => r.id === studentId)
+    if 0 records          → recordTimeIn()
+    if last.time_out null → recordTimeOut()
+    if last.time_out set  → recordTimeIn()  // new cycle
+    sendParentNotification(studentId, 'in'|'out')
+```
+
+---
+
+## Routes
+
+Defined in `src/js/routes.js`:
+
+| Path | Component | Description |
+|------|-----------|-------------|
+| `/home/` | `pages/home.f7` | Login page |
+| `/recognition/` | `pages/recognition.f7` | Live recognition (primary) |
+| `/camera/` | `pages/camera.f7` | Camera capture / face training |
+| `/attendance/records/` | `pages/attendance/records.f7` | Attendance records + date-nav |
+| `/attendance/details/:id/` | `pages/attendance/details.f7` | Single record detail |
+| `/students/` | `pages/students/list.f7` | Student list |
+| `/students/add/` | `pages/students/add.f7` | Add new student |
+| `/students/edit/:id/` | `pages/students/edit.f7` | Edit student |
+| `/students/details/:id/` | `pages/students/details.f7` | Student detail + history |
+| `/students/import/` | `pages/students/import.f7` | Bulk CSV/Excel import |
+
+---
+
+## State Management
+
+The Framework7 Store (`src/js/store.js`) manages global reactive state:
 
 ```javascript
-// Step 1: Get today's records for recognized student
-const todayRecords = await db.getTodayAttendance();
-const studentRecords = todayRecords.filter(r => r.id === studentId);
-
-// Step 2: Apply validation rules
-if (studentRecords.length === 0) {
-  // Rule 1: FIRST TIME TODAY → Record TIME-IN
-  await db.recordTimeIn(studentId, confidence);
-  await sendNotification(studentId, 'in');
-  showToast('✓ Time-in recorded');
-  
-} else {
-  const lastRecord = studentRecords[0]; // Most recent record
-  
-  if (!lastRecord.time_out) {
-    // Rule 2: HAS TIME-IN BUT NO TIME-OUT → Force TIME-OUT
-    await db.recordTimeOut(studentId, confidence);
-    await sendNotification(studentId, 'out');
-    showToast('✓ Time-out recorded');
-    
-  } else {
-    // Rule 3: HAS TIME-OUT → Allow NEW TIME-IN (new cycle)
-    await db.recordTimeIn(studentId, confidence);
-    await sendNotification(studentId, 'in');
-    showToast('✓ Time-in recorded (new cycle)');
-  }
+{
+  user: null,            // { id, username, role }
+  isAdmin: false,
+  isAuthenticated: false,
+  students: [],
+  studentsLoaded: false,
+  attendanceRecords: [],
+  attendanceLoaded: false,
+  recognitionActive: false,
+  lastRecognizedStudent: null,
+  recognitionCooldowns: {},   // { studentId: timestamp } 5s window
+  cameraReady: false,
+  cameraFacing: 'user',       // 'user' | 'environment'
+  flashEnabled: false,
+  schedule: {
+    amIn: '07:00', amOut: '12:00',
+    pmIn: '13:00', pmOut: '17:00',
+  },
+  dbReady: false,
+  modelsLoaded: false,
 }
 ```
 
-**Key Points:**
-- ✅ Prevents duplicate check-ins without time-out
-- ✅ Supports unlimited daily cycles (in/out/in/out...)
-- ✅ Uses proper SQL aliases to avoid column name collision
-- ✅ Filters by `r.id === studentId` (not `r.student_id`)
+### Constants (`src/js/utils/constants.js`)
 
-### Face Recognition Process
-
-```
-1. Camera Frame Capture
-   ↓
-2. Face Detection (TinyFaceDetector)
-   - Detect faces in frame
-   - Return bounding boxes
-   ↓
-3. Facial Landmark Detection
-   - Detect 68 facial landmarks
-   - Normalize face alignment
-   ↓
-4. Face Descriptor Computation
-   - Compute 128-dimensional descriptor
-   - Unique numerical representation of face
-   ↓
-5. Database Comparison
-   - Load all active students with encodings
-   - Compare descriptor with each stored encoding
-   ↓
-6. Distance Calculation (Euclidean Distance)
-   - Calculate distance between descriptors
-   - Lower distance = better match
-   ↓
-7. Match Decision
-   - If distance < 0.6 → MATCH FOUND
-   - If distance >= 0.6 → NO MATCH
-   ↓
-8. Return Result
-   - Student info + confidence score
-   - Or null if no match
-```
-
-### SMS Notification Flow
-
-```javascript
-// When attendance is recorded
-async function sendNotification(studentId, status) {
-  // 1. Get student info from database
-  const student = await db.getStudent(studentId);
-  
-  // 2. Check if parent contact exists
-  if (!student.parent_contact) {
-    console.log('No parent contact - skipping SMS');
-    return;
-  }
-  
-  // 3. Check SMS permission
-  const hasPermission = await notifications.checkSMSPermission();
-  if (!hasPermission) {
-    await notifications.requestSMSPermission();
-  }
-  
-  // 4. Build message
-  const message = buildMessage(student.first_name, status);
-  // Example: "Your child John Doe has arrived at school at 8:30 AM on Feb 5, 2026"
-  
-  // 5. Send SMS silently (no composer popup)
-  const options = {
-    replaceLineBreaks: false,
-    android: { intent: '' } // Silent send
-  };
-  
-  await smsPlugin.send(student.parent_contact, message, options);
-  
-  // 6. Log success
-  console.log('✅ SMS sent successfully');
-}
-```
+| Constant | Value |
+|----------|-------|
+| `APP_CONFIG.VERSION` | `'1.0.0'` |
+| `APP_CONFIG.DB_NAME` | `'attendance_db'` |
+| `USER_ROLES.ADMIN` | `'admin'` |
+| `USER_ROLES.OPERATOR` | `'operator'` |
+| `RECOGNITION_DEFAULTS.MIN_CONFIDENCE` | `0.6` |
+| `RECOGNITION_DEFAULTS.DUPLICATE_WINDOW_MS` | `5000` |
+| `CAMERA_DEFAULTS.FRAME_INTERVAL_MS` | `300` |
+| `EXPORT_FORMATS` | `['csv', 'pdf', 'excel']` |
 
 ---
 
-## 📦 Installation
-
-### First-Time Setup for Beginners
-
-If you're new to **Framework7** and **Cordova**, follow these steps to set up your development environment from scratch.
-
-#### Step 1: Install Node.js and npm
-
-Node.js is required to run JavaScript on your computer and manage packages.
-
-**Windows:**
-1. Download Node.js installer from: https://nodejs.org/
-2. Choose "LTS" (Long Term Support) version
-3. Run the installer and follow the setup wizard
-4. Check "Automatically install necessary tools" option
-
-**macOS:**
-```bash
-# Option 1: Using Homebrew (recommended)
-brew install node
-
-# Option 2: Download installer from https://nodejs.org/
-```
-
-**Linux (Ubuntu/Debian):**
-```bash
-# Install Node.js 18.x
-curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
-sudo apt-get install -y nodejs
-```
-
-**Verify Installation:**
-```bash
-node --version    # Should show v18.x.x or higher
-npm --version     # Should show v9.x.x or higher
-```
-
-#### Step 2: Install Framework7 CLI (Optional)
-
-Framework7 CLI helps create and manage Framework7 projects.
-
-```bash
-# Install globally
-npm install -g framework7-cli
-
-# Verify installation
-framework7 --version
-```
-
-> **Note**: This project doesn't require Framework7 CLI since it's already set up. But it's useful for creating new Framework7 projects in the future.
-
-#### Step 3: Install Cordova CLI
-
-Cordova CLI is essential for building mobile apps.
-
-```bash
-# Install globally
-npm install -g cordova
-
-# Verify installation
-cordova --version    # Should show 12.x.x or higher
-```
-
-#### Step 4: Set Up Android Development (For Android Builds)
-
-**4a. Install Java Development Kit (JDK)**
-
-Cordova requires JDK 11 or higher.
-
-**Windows/macOS:**
-```bash
-# Download JDK 11 from:
-# https://www.oracle.com/java/technologies/javase/jdk11-archive-downloads.html
-
-# Or use OpenJDK:
-# Windows: https://adoptium.net/
-# macOS: brew install openjdk@11
-```
-
-**Linux:**
-```bash
-sudo apt-get update
-sudo apt-get install openjdk-11-jdk
-```
-
-**Verify JDK Installation:**
-```bash
-java -version    # Should show version 11.x.x or higher
-javac -version   # Java compiler version
-```
-
-**4b. Install Android Studio**
-
-Android Studio includes the Android SDK and build tools.
-
-1. **Download Android Studio**: https://developer.android.com/studio
-2. **Install Android Studio**:
-   - Windows/Mac: Run the installer
-   - Linux: Extract and run `studio.sh`
-3. **Open Android Studio** and complete the setup wizard
-4. **Install Android SDK**:
-   - Go to: `Tools → SDK Manager`
-   - Select: `Android SDK Platform 30` (or higher)
-   - Select: `Android SDK Build-Tools`
-   - Select: `Android SDK Command-line Tools`
-   - Click "Apply" to install
-
-**4c. Set Environment Variables**
-
-**Windows:**
-```bash
-# Add to System Environment Variables:
-# Variable: ANDROID_HOME
-# Value: C:\Users\YourUsername\AppData\Local\Android\Sdk
-
-# Add to Path:
-# %ANDROID_HOME%\platform-tools
-# %ANDROID_HOME%\tools
-# %ANDROID_HOME%\cmdline-tools\latest\bin
-```
-
-**macOS/Linux:**
-```bash
-# Add to ~/.bash_profile or ~/.zshrc
-export ANDROID_HOME=$HOME/Library/Android/sdk
-export PATH=$PATH:$ANDROID_HOME/platform-tools
-export PATH=$PATH:$ANDROID_HOME/tools
-export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin
-
-# Reload shell configuration
-source ~/.bash_profile  # or source ~/.zshrc
-```
-
-**Verify Android Setup:**
-```bash
-echo $ANDROID_HOME           # Should show Android SDK path
-adb --version                # Android Debug Bridge
-sdkmanager --list | head -10 # List installed SDK packages
-```
-
-#### Step 5: Set Up iOS Development (Mac Only)
-
-**5a. Install Xcode**
-
-1. Open **App Store** on your Mac
-2. Search for "Xcode"
-3. Click "Get" to install (large download ~12GB)
-4. Wait for installation to complete (30-60 minutes)
-
-**5b. Install Xcode Command Line Tools**
-
-```bash
-# Install command line tools
-xcode-select --install
-
-# Accept Xcode license
-sudo xcodebuild -license accept
-```
-
-**5c. Install CocoaPods**
-
-CocoaPods is a dependency manager for iOS projects.
-
-```bash
-# Install CocoaPods
-sudo gem install cocoapods
-
-# Verify installation
-pod --version
-```
-
-**Verify iOS Setup:**
-```bash
-xcodebuild -version  # Should show Xcode version
-pod --version        # Should show CocoaPods version
-```
-
-#### Step 6: Install Git (Version Control)
-
-Git is needed to clone this repository and manage code.
-
-**Windows:**
-```bash
-# Download Git for Windows:
-# https://git-scm.com/download/win
-
-# Or install via Chocolatey:
-choco install git
-```
-
-**macOS:**
-```bash
-# Install via Homebrew
-brew install git
-
-# Or download from: https://git-scm.com/download/mac
-```
-
-**Linux:**
-```bash
-sudo apt-get update
-sudo apt-get install git
-```
-
-**Configure Git:**
-```bash
-# Set your name and email
-git config --global user.name "Your Name"
-git config --global user.email "your.email@example.com"
-
-# Verify configuration
-git config --list
-```
-
-#### Step 7: Verify Complete Setup
-
-Run this checklist to ensure everything is installed:
-
-```bash
-# Node.js & npm
-node --version     # ✅ v18.x.x or higher
-npm --version      # ✅ v9.x.x or higher
-
-# Cordova
-cordova --version  # ✅ 12.x.x or higher
-
-# Git
-git --version      # ✅ 2.x.x or higher
-
-# Java (for Android)
-java -version      # ✅ 11.x.x or higher
-
-# Android SDK (for Android)
-echo $ANDROID_HOME # ✅ Should show SDK path
-adb --version      # ✅ Android Debug Bridge
-
-# Xcode (for iOS - Mac only)
-xcodebuild -version # ✅ Xcode 14+ (Mac only)
-pod --version      # ✅ CocoaPods (Mac only)
-```
-
-**If all commands show proper versions, you're ready to proceed! 🎉**
-
----
+## Installation
 
 ### Prerequisites
+- Node.js 18+
+- Cordova CLI: `npm install -g cordova`
+- Android Studio + Android SDK (for Android builds)
+- Xcode (for iOS builds, macOS only)
+
+### Clone & Install
 
 ```bash
-# Required software
-node --version     # v18.0.0 or higher
-npm --version      # v9.0.0 or higher
-
-# For Android development
-android --version  # Android SDK Platform 30+
-java -version      # JDK 11 or higher
-
-# For iOS development (Mac only)
-xcodebuild -version # Xcode 14+
-pod --version      # CocoaPods
-```
-
-### Getting the Project from GitHub
-
-#### Option 1: Clone via HTTPS (Recommended for beginners)
-
-```bash
-# Clone the repository
-git clone https://github.com/your-username/attendance-facial-recognition.git
-
-# Navigate into the project directory
-cd attendance-facial-recognition
-```
-
-#### Option 2: Clone via SSH (For users with SSH keys configured)
-
-```bash
-# Clone the repository using SSH
-git clone git@github.com:your-username/attendance-facial-recognition.git
-
-# Navigate into the project directory
-cd attendance-facial-recognition
-```
-
-#### Option 3: Download as ZIP
-
-If you don't have Git installed or prefer not to use it:
-
-1. **Visit the GitHub repository** in your browser:
-   ```
-   https://github.com/your-username/attendance-facial-recognition
-   ```
-
-2. **Click the green "Code" button** at the top right of the file list
-
-3. **Select "Download ZIP"** from the dropdown menu
-
-4. **Extract the ZIP file** to your desired location:
-   ```bash
-   # macOS/Linux
-   unzip attendance-facial-recognition-main.zip
-   cd attendance-facial-recognition-main
-   
-   # Windows (PowerShell)
-   Expand-Archive attendance-facial-recognition-main.zip
-   cd attendance-facial-recognition-main
-   ```
-
-#### Option 4: Fork the Repository (For contributors)
-
-If you plan to contribute or maintain your own version:
-
-1. **Visit the repository** on GitHub:
-   ```
-   https://github.com/your-username/attendance-facial-recognition
-   ```
-
-2. **Click the "Fork" button** at the top right of the page
-
-3. **Clone your forked repository**:
-   ```bash
-   # Replace YOUR_USERNAME with your GitHub username
-   git clone https://github.com/YOUR_USERNAME/attendance-facial-recognition.git
-   cd attendance-facial-recognition
-   ```
-
-4. **Add upstream remote** (to sync with original repository):
-   ```bash
-   git remote add upstream https://github.com/your-username/attendance-facial-recognition.git
-   
-   # Verify remotes
-   git remote -v
-   # Should show:
-   # origin    https://github.com/YOUR_USERNAME/attendance-facial-recognition.git (fetch)
-   # origin    https://github.com/YOUR_USERNAME/attendance-facial-recognition.git (push)
-   # upstream  https://github.com/your-username/attendance-facial-recognition.git (fetch)
-   # upstream  https://github.com/your-username/attendance-facial-recognition.git (push)
-   ```
-
-5. **Keep your fork updated**:
-   ```bash
-   # Fetch upstream changes
-   git fetch upstream
-   
-   # Merge upstream changes to your main branch
-   git checkout main
-   git merge upstream/main
-   
-   # Push updates to your fork
-   git push origin main
-   ```
-
-#### Verify Git Installation
-
-If you don't have Git installed:
-
-**macOS:**
-```bash
-# Install via Homebrew
-brew install git
-
-# Or download from: https://git-scm.com/download/mac
-```
-
-**Windows:**
-```bash
-# Download Git for Windows
-# https://git-scm.com/download/win
-
-# Or install via Chocolatey
-choco install git
-```
-
-**Linux (Ubuntu/Debian):**
-```bash
-sudo apt-get update
-sudo apt-get install git
-```
-
-**Verify installation:**
-```bash
-git --version
-# Should output: git version 2.x.x
-```
-
-### Step-by-Step Installation
-
-Once you have the project files from GitHub, follow these steps:
-
-#### 1. Verify Project Structure
-```bash
-# List project contents
-ls -la
-
-# Should see:
-# src/
-# cordova/
-# package.json
-# vite.config.js
-# README.md
-# etc.
-```
-
-#### 2. Install Dependencies
-```bash
-# Install npm packages
+git clone https://github.com/bandeto45/attendance_facial_recognition.git
+cd attendance_facial_recognition
 npm install
-
-# This will automatically:
-# - Install node_modules
-# - Copy icon fonts to src/fonts/
-# - Copy assets to public/assets/
+cd cordova && npm install
 ```
 
-#### 3. Install Cordova CLI (if not installed)
-```bash
-npm install -g cordova
-```
+### Add Platforms
 
-#### 4. Setup Cordova Platforms
 ```bash
 cd cordova
-
-# Add Android platform
 cordova platform add android
-
-# Add iOS platform (Mac only)
-cordova platform add ios
-
-cd ..
-```
-
-#### 5. Verify Plugin Installation
-```bash
-cd cordova
-cordova plugin list
-
-# Should show:
-# cordova-plugin-email-composer 0.10.1
-# cordova-plugin-file 8.1.3
-# cordova-plugin-keyboard 1.3.0
-# cordova-plugin-statusbar 4.0.0
-# cordova-plugin-vibration 3.1.1
-# cordova-sqlite-storage 7.0.0
-# cordova-sms-plugin (for SMS notifications)
+cordova platform add ios   # macOS only
 ```
 
 ---
 
-## 🚀 Usage
+## Usage & Build
 
-### Development Mode (Browser Testing)
+### NPM Scripts
+
+| Script | Description |
+|--------|-------------|
+| `npm run dev` | Start Vite dev server (http://localhost:5173) |
+| `npm run build` | Production build to `www/` |
+| `npm run build-cordova` | Build + copy to `cordova/www/` |
+
+### Full Deploy to Android Device
 
 ```bash
-# Start development server with hot reload
-npm run dev
-
-# Open browser at http://localhost:3000
-# Note: Camera and SQLite features won't work in browser
+npm run build-cordova && cd cordova && cordova run android --device
 ```
 
-### Build for Production
+### Check Android Logs
 
 ```bash
-# Build web version
-npm run build
-
-# Build Cordova app (both Android & iOS)
-npm run build-cordova
-```
-
-### Build for Android
-
-```bash
-# Build Android APK (debug)
-npm run cordova-android
-
-# Output: cordova/platforms/android/app/build/outputs/apk/debug/app-debug.apk
-
-# Build Android APK (release)
-cd cordova
-cordova build android --release
-
-# Sign the APK
-jarsigner -verbose -sigalg SHA1withRSA -digestalg SHA1 \
-  -keystore my-release-key.keystore \
-  platforms/android/app/build/outputs/apk/release/app-release-unsigned.apk \
-  alias_name
-```
-
-### Build for iOS (Mac Only)
-
-```bash
-# Build iOS app
-npm run cordova-ios
-
-# This will open Xcode
-# Or manually: open cordova/platforms/ios/App.xcworkspace
-
-# In Xcode:
-# 1. Select your team and signing certificate
-# 2. Connect iOS device
-# 3. Click Run
-```
-
-### Run on Device
-
-```bash
-# Android (USB debugging enabled)
-cd cordova
-cordova run android --device
-
-# iOS (Mac only, provisioning profile required)
-cordova run ios --device
+adb logcat | grep -E "chromium|CordovaActivity|Attendance"
 ```
 
 ---
 
-## 🔧 Build & Deploy
+## Cordova Plugins
 
-### Complete Build Process
+| Plugin | Purpose |
+|--------|---------|
+| `cordova-plugin-android-permissions` | Runtime permissions (SMS, Camera, Audio) |
+| `cordova-plugin-camera-preview` | Continuous live camera feed |
+| `cordova-plugin-email-composer` | Email attendance reports |
+| `cordova-plugin-file` | File read/write for exports |
+| `cordova-plugin-file-opener2` | Open exported CSV/PDF |
+| `cordova-plugin-inappbrowser` | In-app web views |
+| `cordova-plugin-keyboard` | Keyboard event handling |
+| `cordova-plugin-statusbar` | Status bar colour/style |
+| `cordova-plugin-vibration` | Haptic feedback on recognition |
+| `cordova-sms-plugin` | Silent background SMS to parents |
+| `cordova-sqlite-storage` | Local SQLite database |
 
-```bash
-# Clean previous builds
-rm -rf cordova/www
-rm -rf cordova/platforms/android/build
+### Runtime Permissions (Home Page Mount)
 
-# Build from scratch
-npm run build-cordova
-
-# Or step by step:
-# 1. Copy assets
-npm run copy-assets
-
-# 2. Build with Vite
-cross-env TARGET=cordova NODE_ENV=production vite build
-
-# 3. Copy to Cordova
-node ./build/build-cordova.js
-
-# 4. Build Android
-cd cordova && cordova build android
+```javascript
+permissions.requestPermissions([
+  permissions.SEND_SMS,
+  permissions.CAMERA,
+  permissions.RECORD_AUDIO,
+], (status) => { ... });
 ```
-
-### APK Installation
-
-```bash
-# Install via ADB
-adb install cordova/platforms/android/app/build/outputs/apk/debug/app-debug.apk
-
-# Or manually:
-# 1. Copy APK to device
-# 2. Open file manager on device
-# 3. Tap APK file to install
-# 4. Allow "Install from unknown sources"
-```
-
-### Release Checklist
-
-- [ ] Update version in `cordova/config.xml`
-- [ ] Update version in `package.json`
-- [ ] Test all features on real device
-- [ ] Check SMS notifications working
-- [ ] Verify face recognition accuracy
-- [ ] Test database operations
-- [ ] Export attendance reports
-- [ ] Build release APK
-- [ ] Sign APK with release key
-- [ ] Test signed APK on device
-- [ ] Create release notes
-- [ ] Tag release in git: `git tag v1.0.0`
 
 ---
 
-## 📚 Plugins & Libraries
+## Development Guide
 
-### Cordova Plugins
+### Framework7 v9 — Critical Rules
 
-> **Note on Camera**: This app uses the standard Web API `navigator.mediaDevices.getUserMedia()` for camera access instead of Cordova camera plugins. This provides better compatibility across platforms and leverages native browser capabilities.
-
-| Plugin | Version | Purpose | Source |
-|--------|---------|---------|--------|
-| **cordova-sqlite-storage** | 7.0.0 | Native SQLite database | [GitHub](https://github.com/xpbrew/cordova-sqlite-storage) |
-| **cordova-plugin-file** | 8.1.3 | File system access | [GitHub](https://github.com/apache/cordova-plugin-file) |
-| **cordova-plugin-email-composer** | 0.10.1 | Email sharing | [GitHub](https://github.com/katzer/cordova-plugin-email-composer) |
-| **cordova-plugin-statusbar** | 4.0.0 | Status bar styling | [GitHub](https://github.com/apache/cordova-plugin-statusbar) |
-| **cordova-plugin-keyboard** | 1.3.0 | Keyboard control | [GitHub](https://github.com/apache/cordova-plugin-keyboard) |
-| **cordova-plugin-vibration** | 3.1.1 | Haptic feedback | [GitHub](https://github.com/apache/cordova-plugin-vibration) |
-
-**SMS Plugin (Manual Install):**
-```bash
-cd cordova
-cordova plugin add cordova-sms-plugin
-# For Android: Adds SEND_SMS & READ_PHONE_STATE permissions
-```
-
-**Optional: Remove Unused Camera Plugin**
-
-If `cordova-plugin-camera-preview` is installed but not being used (app uses getUserMedia instead), you can remove it:
-
-```bash
-cd cordova
-cordova plugin remove cordova-plugin-camera-preview
-
-# This will:
-# - Remove the plugin from the project
-# - Free up ~2MB of space
-# - Simplify the build process
-# - Remove unnecessary camera permissions (CAMERA already covered by getUserMedia)
-```
-
-### NPM Libraries
-
-#### Core Framework
-```json
-{
-  "framework7": "^9.0.2",           // Mobile app framework
-  "dom7": "^4.0.6",                 // DOM manipulation
-  "swiper": "^12.0.3"               // Touch slider
-}
-```
-
-#### Face Recognition
-```json
-{
-  "@vladmandic/face-api": "^1.7.15"  // TensorFlow.js face detection
-}
-```
-
-#### File Processing
-```json
-{
-  "papaparse": "^5.5.3",            // CSV parsing
-  "xlsx": "^0.18.5",                // Excel files
-  "pdfkit": "^0.17.2"               // PDF generation
-}
-```
-
-#### UI Components
-```json
-{
-  "framework7-icons": "^5.0.5",     // Framework7 icons
-  "material-icons": "^1.13.14",     // Material Design icons
-  "skeleton-elements": "^4.0.1"     // Loading skeletons
-}
-```
-
-#### Build Tools
-```json
-{
-  "vite": "^7.3.1",                 // Build tool
-  "less": "^4.5.1",                 // CSS preprocessor
-  "cross-env": "^10.1.0",           // Cross-platform env vars
-  "cpy-cli": "^6.0.0"               // File copying
-}
-```
-
-### Model Files (included in project)
-
-Face recognition models located in `src/assets/models/`:
-
-```
-├── tiny_face_detector_model-shard1
-├── tiny_face_detector_model-weights_manifest.json
-├── face_landmark_68_model-shard1
-├── face_landmark_68_model-weights_manifest.json
-├── face_recognition_model-shard1
-├── face_recognition_model-shard2
-└── face_recognition_model-weights_manifest.json
-```
-
-**Total size**: ~6MB  
-**Source**: [@vladmandic/face-api](https://github.com/vladmandic/face-api) pre-trained models
-
----
-
-## 💻 Development Guide
-
-### Project Configuration Files
-
-#### `package.json`
-- npm dependencies
-- Build scripts
-- Browserslist targets
-
-#### `vite.config.js`
+#### Use `$h` for array mappings
 ```javascript
-// Vite bundler configuration
-- Entry point: src/index.html
-- Output: www/ (for web) or cordova/www/ (for mobile)
-- Asset handling
-- Environment variables
+// ✅ Correct — renders as HTML
+${items.map((item) => $h`<li key=${item.id}>${item.name}</li>`)}
+
+// ❌ Wrong — renders as plain text
+${items.map((item) => `<li>${item.name}</li>`)}
 ```
 
-#### `cordova/config.xml`
-```xml
-<!-- Cordova app configuration -->
-- App ID: proj.att.fc
-- App name: Attendance Monitoring
-- Plugins list
-- Platform preferences
-- Permissions (SMS, Camera, etc.)
-```
-
-#### `framework7.json`
-```json
-// Framework7 CLI configuration
-- Custom color theme
-- Components included
-- Build options
-```
-
-### Key JavaScript Modules
-
-#### `src/js/app.js` - App Initialization
+#### Reusable components use `<${}>` syntax
 ```javascript
-// Initializes Framework7 app
-- Theme configuration (iOS/Material)
-- Routes registration
-- Store initialization
-- Cordova integration
-```
-
-#### `src/js/routes.js` - Route Configuration
-```javascript
-// All app routes
-- Login: /
-- Recognition: /recognition/
-- Camera: /camera/:mode/
-- Attendance: /attendance/records/
-- Students: /students/
-```
-
-#### `src/js/store.js` - State Management
-```javascript
-// Framework7 Store for global state
-- User session
-- Current student data
-- Attendance records
-- App preferences
-```
-
-#### `src/js/utils/database.js` - Database Layer
-```javascript
-// SQLite database operations
-class Database {
-  async init()                          // Initialize database
-  async createTables()                  // Create schema
-  
-  // Students CRUD
-  async addStudent(data)
-  async getStudent(id)
-  async getAllStudents()
-  async updateStudent(id, data)
-  async deleteStudent(id)
-  async searchStudents(query)
-  
-  // Attendance CRUD
-  async recordTimeIn(studentId, confidence)
-  async recordTimeOut(studentId, confidence)
-  async getTodayAttendance()
-  async getAttendanceByDate(date)
-  async getAttendanceByDateRange(start, end)
-  async getStudentAttendanceHistory(studentId)
-  
-  // Face Encodings
-  async updateFaceEncoding(studentId, encoding)
-  async getStudentsWithEncodings()
-}
-```
-
-#### `src/js/utils/faceDetection.js` - Face Detection
-```javascript
-// Face detection using face-api.js
-async function loadModels()              // Load TensorFlow models
-async function detectFaces(videoElement) // Detect faces in frame
-async function getFaceDescriptor(detection) // Get 128D descriptor
-function euclideanDistance(desc1, desc2) // Calculate distance
-```
-
-#### `src/js/utils/face-recognition.js` - Face Recognition
-```javascript
-// Face recognition & matching
-async function recognizeFace(descriptor, students) {
-  // Compare with all students
-  // Return best match if distance < threshold
-}
-
-async function startRecognitionLoop(videoElement, students, onMatch) {
-  // Continuous face detection loop
-  // Call onMatch when student recognized
-}
-```
-
-#### `src/pages/camera.f7` - Camera Implementation
-```javascript
-// Camera access using Web API (getUserMedia)
-// No Cordova camera plugin required - uses standard browser API
-
-async function requestCameraPermission() {
-  // Request camera permission via:
-  // 1. cordova.plugins.permissions (Android) - native permission dialog
-  // 2. navigator.mediaDevices.getUserMedia (fallback) - browser permission
-  
-  const stream = await navigator.mediaDevices.getUserMedia({
-    video: { 
-      facingMode: 'user',      // Front camera
-      width: { ideal: 1280 },  // HD resolution
-      height: { ideal: 720 }
-    },
-    audio: false
-  });
-  
-  videoEl.srcObject = stream;  // Attach to <video> element
-  await videoEl.play();         // Start playback
-}
-
-// Camera is rendered in HTML5 <video> element
-// Face detection runs on video frames via canvas capture
-```
-
-**Why getUserMedia instead of cordova-plugin-camera-preview:**
-- ✅ Better cross-platform compatibility (Android, iOS, browser)
-- ✅ Native browser capabilities (hardware acceleration)
-- ✅ Simpler implementation (no native plugin dependencies)
-- ✅ Easier debugging (works in browser for development)
-- ✅ Future-proof (standard Web API, not Cordova-specific)
-
-#### `src/js/utils/notifications.js` - Notifications
-```javascript
-// SMS & notification service
-class NotificationService {
-  async init()
-  async requestSMSPermission()
-  async sendSMS(phoneNumber, message)
-  async sendParentNotification(studentId, status)
-}
-```
-
-#### `src/js/utils/export.js` - Export Service
-```javascript
-// Export attendance to files
-async function exportToCSV(data, filename)
-async function exportToPDF(data, filename)
-async function exportToExcel(data, filename)
-async function saveFileToDevice(blob, filename)
-async function openFile(filePath, mimeType)
+import BottomToolbar from '../../components/BottomToolbar.f7';
+// in template:
+<${BottomToolbar} active-tab="recognition" />
 ```
 
 ### CSS Architecture
 
-#### `src/css/app.less` - Main Stylesheet
+Shared styles live in `src/css/` — never duplicate in `.f7` `<style>` blocks.
+
+#### CSS Variables
+```css
+--attendance-primary:   #4CAF50   /* Green  — check-in / present */
+--attendance-accent:    #FF5722   /* Red    — check-out / alert  */
+--attendance-secondary: #232B2B   /* Charcoal — text             */
+--attendance-bg:        #FFFFFF   /* Background (light mode)     */
+```
+
+#### Page Transition Toolbar Fix
 ```less
-// CSS Variables (Golden Ratio Design System)
-:root {
-  // Colors
-  --attendance-primary: #4CAF50;     // Green
-  --attendance-accent: #FF5722;      // Red
-  --attendance-secondary: #232B2B;   // Dark
-  
-  // Typography (Golden Ratio Scale)
-  --font-base: 16px;
-  --font-lg: 22px;
-  --font-xl: 26px;
-  
-  // Spacing (Golden Ratio Scale)
-  --space-1: 8px;
-  --space-2: 13px;
-  --space-3: 16px;
-  --space-4: 21px;
-  
-  // Border Radius
-  --radius-sm: 8px;
-  --radius-md: 12px;
-  --radius-lg: 16px;
-}
-
-// Utility Classes
-.m-{size}, .p-{size}     // Margin/padding
-.text-{size}             // Font sizes
-.color-{name}            // Text colors
-.bg-{name}               // Background colors
-.rounded-{size}          // Border radius
-.flex, .grid             // Layout
-```
-
-#### Component Styling Pattern
-```less
-// BEM-style naming
-.component-name {
-  // Base styles
-  
-  &--modifier {
-    // Variant styles
-  }
-  
-  &__element {
-    // Child element styles
-  }
-  
-  &.theme-dark {
-    // Dark mode overrides
-  }
+// src/css/app.less — hides previous page's toolbar during F7 transition
+.page-previous, .page-on-left {
+  .toolbar-bottom { display: none !important; }
+  .navbar         { visibility: hidden !important; }
 }
 ```
 
-### Adding New Features
+#### CSS Grid Date-Nav
+`overflow: hidden` on a flex container clips children. Use CSS Grid:
 
-#### 1. Create New Page
-```bash
-# Create new .f7 file
-touch src/pages/myfeature/mypage.f7
-```
-
-```html
-<!-- src/pages/myfeature/mypage.f7 -->
-<template>
-  <div class="page">
-    <div class="navbar">
-      <div class="navbar-bg"></div>
-      <div class="navbar-inner">
-        <div class="left">
-          <a href="#" class="link back">
-            <i class="icon material-icons">arrow_back</i>
-          </a>
-        </div>
-        <div class="title">My Feature</div>
-      </div>
-    </div>
-    
-    <div class="page-content">
-      <h1>Content here</h1>
-    </div>
-  </div>
-</template>
-
-<script>
-export default (props, { $f7, $on, $onMounted }) => {
-  $onMounted(() => {
-    console.log('Page mounted');
-  });
-  
-  return $render;
+```css
+.date-nav {
+  display: grid;
+  grid-template-columns: 36px 1fr 36px 52px;  /* ← date → Today */
+  gap: 6px;
+  align-items: center;
+  width: 100%;
 }
-</script>
-
-<style scoped>
-/* Page-specific styles */
-</style>
-```
-
-#### 2. Register Route
-```javascript
-// src/js/routes.js
-import MyPage from '../pages/myfeature/mypage.f7';
-
-const routes = [
-  // ... existing routes
-  {
-    path: '/myfeature/',
-    component: MyPage,
-  },
-];
-```
-
-#### 3. Add Navigation
-```html
-<!-- In any page -->
-<a href="/myfeature/" class="link">
-  Go to My Feature
-</a>
-```
-
-### Debugging
-
-#### Enable Debug Logs
-```javascript
-// src/js/app.js
-const app = f7.createApp({
-  // ...
-  debug: true, // Enable Framework7 debug logs
-});
-```
-
-#### Console Logging Pattern
-```javascript
-// Use emoji prefixes for easier log filtering
-console.log('🚀 App Started');
-console.log('📱 Permission granted');
-console.log('📷 Camera started');
-console.log('👤 Face detected');
-console.log('✅ Success');
-console.log('❌ Error occurred');
-console.log('⚠️ Warning');
-```
-
-#### View Android Logs
-```bash
-# View all logs
-adb logcat
-
-# Filter by tag
-adb logcat | grep "Attendance"
-
-# View errors only
-adb logcat *:E
-
-# Clear logs
-adb logcat -c
-```
-
-#### View iOS Logs (Mac)
-```bash
-# Using Xcode
-# Window → Devices and Simulators → Select device → View Device Logs
-
-# Or using command line
-idevicesyslog
-
-# Filter logs
-idevicesyslog | grep "Attendance"
 ```
 
 ---
 
-## 🐛 Troubleshooting
+## Troubleshooting
 
-### Common Issues & Solutions
-
-#### 1. **Camera Not Starting**
-
-**Symptoms:**
-- Black screen on camera page
-- Error: "Camera permission denied"
-
-**Solutions:**
-```bash
-# Check permissions in device settings
-# Settings → Apps → Attendance → Permissions → Camera (Allow)
-
-# Restart app after granting permission
-
-# Check if camera plugin installed
-cd cordova
-cordova plugin list | grep camera-preview
-```
-
-**Debug Code:**
-```javascript
-// In camera.f7
-console.log('📷 Camera permission status:', hasPermission);
-console.log('📸 Starting camera with options:', cameraOptions);
-```
-
-#### 2. **SQLite Database Not Initializing**
-
-**Symptoms:**
-- Error: "SQLite plugin not available"
-- Database operations fail
-
-**Solutions:**
-```bash
-# Verify plugin installed
-cd cordova
-cordova plugin list | grep sqlite
-
-# Reinstall if missing
-cordova plugin remove cordova-sqlite-storage
-cordova plugin add cordova-sqlite-storage
-
-# Rebuild app
-cd ..
-npm run build-cordova
-```
-
-**Debug Code:**
-```javascript
-// In database.js
-console.log('🗄️ SQLite plugin available:', !!window.sqlitePlugin);
-console.log('📊 Database initialized:', db.isInitialized);
-```
-
-#### 3. **Face Recognition Models Not Loading**
-
-**Symptoms:**
-- Error: "Failed to load models"
-- Face detection not working
-
-**Solutions:**
-```bash
-# Check if model files exist
-ls -lh src/assets/models/
-
-# Should see:
-# tiny_face_detector_model-*
-# face_landmark_68_model-*
-# face_recognition_model-*
-
-# Verify files copied to build
-ls -lh cordova/www/assets/models/
-
-# If missing, rebuild
-npm run build-cordova
-```
-
-**Debug Code:**
-```javascript
-// In faceDetection.js
-console.log('🔄 Loading models from:', modelPath);
-console.log('✅ Models loaded successfully');
-```
-
-#### 4. **SMS Not Sending**
-
-**Symptoms:**
-- Attendance recorded but no SMS sent
-- Error: "SMS permission not granted"
-
-**Solutions:**
-```bash
-# Check SMS plugin installed
-cd cordova
-cordova plugin list | grep sms
-
-# Install if missing
-cordova plugin add cordova-sms-plugin
-
-# Check permissions in config.xml
-grep SEND_SMS cordova/config.xml
-# Should see: <uses-permission android:name="android.permission.SEND_SMS" />
-
-# Grant permission in device settings
-# Settings → Apps → Attendance → Permissions → SMS (Allow)
-```
-
-**Debug Code:**
-```javascript
-// In notifications.js
-console.log('📱 SMS permission granted:', this.smsPermissionGranted);
-console.log('💬 Sending SMS to:', phoneNumber);
-console.log('✅ SMS sent successfully');
-```
-
-#### 5. **Build Errors**
-
-**Error: "Cannot find module"**
-```bash
-# Clear node_modules and reinstall
-rm -rf node_modules package-lock.json
-npm install
-```
-
-**Error: "Cordova platform not found"**
-```bash
-cd cordova
-cordova platform add android
-cd ..
-```
-
-**Error: "Vite build failed"**
-```bash
-# Clear cache and rebuild
-rm -rf .vite
-rm -rf www
-rm -rf cordova/www
-npm run build-cordova
-```
-
-#### 6. **APK Installation Failed**
-
-**Error: "App not installed"**
-```bash
-# Uninstall old version first
-adb uninstall proj.att.fc
-
-# Then install new APK
-adb install cordova/platforms/android/app/build/outputs/apk/debug/app-debug.apk
-```
-
-**Error: "Signature mismatch"**
-```bash
-# This happens when trying to install over existing app with different signature
-# Solution: Uninstall the old app completely first
-```
-
-### Performance Optimization
-
-#### Face Recognition Performance
-```javascript
-// Adjust detection interval (in faceDetection.js)
-const DETECTION_INTERVAL = 500; // milliseconds (default: 500ms)
-
-// Reduce confidence threshold (less accurate but faster)
-const CONFIDENCE_THRESHOLD = 0.65; // (default: 0.7)
-
-// Use smaller input size
-const inputSize = 320; // (default: 416, options: 128/160/224/320/416/512/608)
-```
-
-#### Database Performance
-```javascript
-// Use indexed queries
-CREATE INDEX idx_attendance_date ON attendance(attendance_date);
-CREATE INDEX idx_student_id ON students(student_id);
-
-// Limit query results
-SELECT * FROM attendance LIMIT 100;
-
-// Use prepared statements (already implemented in database.js)
-```
-
-#### App Performance
-```bash
-# Enable production build (minification, tree-shaking)
-cross-env NODE_ENV=production vite build
-
-# Analyze bundle size
-npm run build -- --mode analyze
-```
-
-### Getting Help
-
-#### Documentation
-- **Project Docs**: `/PROJECT_DOCUMENTATION.md`
-- **Instructions**: `/.github/instructions/attendance-live-recog.instructions.md`
-- **Framework7 Docs**: https://framework7.io/docs/
-- **Cordova Docs**: https://cordova.apache.org/docs/
-- **face-api.js**: https://github.com/vladmandic/face-api
-
-#### Support Channels
-- **GitHub Issues**: Report bugs and feature requests
-- **Email**: support@attendance-app.com
-- **Forum**: Framework7 Community Forum
-
-#### Debug Commands Cheatsheet
-```bash
-# View running processes
-adb shell ps | grep proj.att.fc
-
-# Clear app data
-adb shell pm clear proj.att.fc
-
-# View app storage
-adb shell run-as proj.att.fc ls -la
-
-# Export database from device
-adb shell run-as proj.att.fc cat databases/attendance.db > attendance.db
-
-# Take screenshot
-adb shell screencap /sdcard/screenshot.png
-adb pull /sdcard/screenshot.png
-
-# Record screen video
-adb shell screenrecord /sdcard/demo.mp4
-# (Ctrl+C to stop)
-adb pull /sdcard/demo.mp4
-```
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+| Date-nav shows only `<` button | `overflow: hidden` clips flex children | Use `display: grid; grid-template-columns: 36px 1fr 36px 52px` |
+| Bottom toolbar appears twice | F7 keeps `.page-previous` in DOM during transition | Add `.page-previous { .toolbar-bottom { display: none } }` to `app.less` |
+| Student always gets time-in, never time-out | SQL column collision — `s.student_id` overwrites `a.student_id` in JOIN | Use aliases: `a.id as attendance_id`, `a.student_id as student_db_id` |
+| SMS not sending | `SEND_SMS` permission denied or wrong format | Grant on Home load; use `+63...` format |
+| Camera black screen | Permission denied or plugin not initialised | Check `✅ Camera permission granted` in logcat |
+| Face recognition never triggers | Models missing from `assets/models/` | Verify files exist; check `✅ Models loaded successfully` |
+| Build error: `cordova/www` empty | Copy step in `build-cordova.js` failed | Run `npm run build` first, then copy script |
 
 ---
 
-## 📄 License
-
-**Proprietary License**
-
-© 2026 Attendance Facial Recognition System. All rights reserved.
-
-This software is proprietary and confidential. Unauthorized copying, distribution, or use of this software, via any medium, is strictly prohibited.
-
-For licensing inquiries, contact: your@email.com
-
----
-
-## 👥 Contributors
-
-- **Developer**: Your Name
-- **Organization**: Your School/Company
-- **Year**: 2026
-
----
-
-## 🔗 Resources
-
-### Official Documentation
-- [Framework7 Documentation](https://framework7.io/docs/)
-- [Cordova Documentation](https://cordova.apache.org/docs/)
-- [Vite Documentation](https://vitejs.dev/)
-- [face-api.js GitHub](https://github.com/vladmandic/face-api)
-
-### Tutorials & Guides
-- [Framework7 React Tutorial](https://framework7.io/react/)
-- [Cordova Plugin Development](https://cordova.apache.org/docs/en/latest/guide/hybrid/plugins/)
-- [TensorFlow.js Face Detection](https://github.com/tensorflow/tfjs-models/tree/master/face-detection)
-
-### Community
-- [Framework7 Forum](https://forum.framework7.io)
-- [Cordova Community](https://cordova.apache.org/community/)
-- [Stack Overflow](https://stackoverflow.com/questions/tagged/framework7)
-
----
-
-## 📊 Project Statistics
-
-- **Lines of Code**: ~15,000+
-- **Files**: 50+ (.f7, .js, .less, etc.)
-- **Database Tables**: 2 (students, attendance)
-- **Cordova Plugins**: 7
-- **NPM Dependencies**: 15+
-- **Face Recognition Models**: 3
-- **Supported Platforms**: Android, iOS
-- **Minimum Android**: 7.0 (API 24)
-- **Minimum iOS**: 12.0
-
----
-
-**Last Updated**: February 5, 2026  
-**Version**: 1.0.0  
-**Status**: Production Ready ✅
+*App ID: `proj.att.fc` · Version: `1.0.0` · Platform: Android API 24+ / iOS 15+ · Last Updated: March 2, 2026*
