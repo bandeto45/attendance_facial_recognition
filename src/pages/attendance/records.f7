@@ -23,32 +23,55 @@
 
     <!-- Page Content -->
     <div class="page-content">
-      <!-- Date Filter -->
-      <div class="block">
-        <div class="flex items-center justify-between gap-3">
-          <div class="flex-1">
-            <a href="#" class="button button-outline button-small" @click="${showDatePicker}">
-              <i class="icon material-icons">calendar</i>
-              <span class="ml-2">${selectedDate}</span>
-            </a>
-          </div>
-          <div>
-            <a href="#" class="button button-fill button-small" @click="${loadToday}">Today</a>
-          </div>
+
+      <!-- Date Navigation -->
+      <div class="date-nav-wrapper">
+        <div class="date-nav">
+          <button class="date-nav__btn" @click=${prevDay}>
+            <i class="icon material-icons">chevron_left</i>
+          </button>
+          <a href="#" class="date-nav__label" @click=${showDatePicker}>
+            <i class="icon material-icons date-nav__cal-icon">calendar_today</i>
+            <span class="date-nav__text">${selectedDate}</span>
+          </a>
+          <button class="date-nav__btn" @click=${nextDay}>
+            <i class="icon material-icons">chevron_right</i>
+          </button>
+          <button class="date-nav__today" @click=${loadToday}>Today</button>
+        </div>
+      </div>
+
+      <!-- Search Bar -->
+      <div class="block" style="padding-bottom:0;">
+        <div class="searchbar-records">
+          <i class="icon material-icons searchbar-records__icon">search</i>
+          <input
+            type="text"
+            class="searchbar-records__input"
+            placeholder="Search by name or student ID..."
+            value="${searchQuery}"
+            @input=${handleSearch}
+          />
+          ${searchQuery ? $h`
+            <button class="searchbar-records__clear" @click=${clearSearch}>
+              <i class="icon material-icons">close</i>
+            </button>
+          ` : ''}
         </div>
       </div>
 
       <!-- Statistics Cards -->
       <div class="block">
-        <div class="grid grid-cols-3 gap-3">
-          <${StatCard} value="${stats.present}" label="Present" />
-          <${StatCard} value="${stats.late}" label="Late" />
-          <${StatCard} value="${stats.absent}" label="Absent" />
+        <div class="grid grid-cols-2 gap-2">
+          <${StatCard} value=${stats.present} label="Present" color="green" />
+          <${StatCard} value=${stats.late}    label="Late"    color="orange" />
+          <${StatCard} value=${stats.early}   label="Early"   color="blue" />
+          <${StatCard} value=${stats.absent}  label="Absent"  color="red" />
         </div>
       </div>
 
       <!-- Filter Chips -->
-      <div class="block">
+      <div class="block" style="padding-top:0;">
         <div class="flex gap-2 flex-wrap">
           <a href="#" class="chip ${filterStatus === 'all' ? 'chip-outline' : ''}" @click="${() => setFilter('all')}">
             <div class="chip-label">All (${records.length})</div>
@@ -59,41 +82,77 @@
           <a href="#" class="chip ${filterStatus === 'late' ? 'chip-outline' : ''}" @click="${() => setFilter('late')}">
             <div class="chip-label">Late (${stats.late})</div>
           </a>
+          <a href="#" class="chip chip--early ${filterStatus === 'early' ? 'chip-outline-early' : ''}" @click="${() => setFilter('early')}">
+            <div class="chip-label">Early (${stats.early})</div>
+          </a>
+          <a href="#" class="chip chip--absent ${filterStatus === 'absent' ? 'chip-outline-absent' : ''}" @click="${() => setFilter('absent')}">
+            <div class="chip-label">Absent (${stats.absent})</div>
+          </a>
+          <a href="#" class="chip chip--in ${filterStatus === 'still-in' ? 'chip-outline-in' : ''}" @click="${() => setFilter('still-in')}">
+            <div class="chip-label">Still In (${stats.stillIn})</div>
+          </a>
+          <a href="#" class="chip chip--out ${filterStatus === 'timed-out' ? 'chip-outline-out' : ''}" @click="${() => setFilter('timed-out')}">
+            <div class="chip-label">Timed Out (${stats.timedOut})</div>
+          </a>
         </div>
       </div>
 
       <!-- Attendance Records List -->
       <div class="block-title">
-        ${filterStatus === 'all' ? 'All Records' : filterStatus.charAt(0).toUpperCase() + filterStatus.slice(1)} 
-        (${filteredRecords.length})
+        ${filterStatus === 'absent' ? 'Absent Students' : filterStatus === 'all' ? 'All Records' : filterStatus === 'still-in' ? 'Still In' : filterStatus === 'timed-out' ? 'Timed Out' : filterStatus.charAt(0).toUpperCase() + filterStatus.slice(1)}
+        <span class="records-count">(${filterStatus === 'absent' ? absentStudents.length : filteredRecords.length}${searchQuery && filterStatus !== 'absent' ? ' of ' + records.length : ''})</span>
       </div>
       <div class="block">
-        ${filteredRecords.length === 0 ? $h`
-          <${EmptyState} 
-            icon="doc_text" 
-            title="No Records Found"
-            message="No attendance records for ${selectedDate}"
-          />
-        ` : filteredRecords.map(record => $h`
-          <div class="attendance-feed-item" @click=${() => viewDetails(record.id)}>
-            <div class="attendance-feed-item__photo-placeholder">
-              <i class="icon material-icons">person</i>
-            </div>
-            <div class="attendance-feed-item__info">
-              <div class="attendance-feed-item__name">${record.name}</div>
-              <div class="attendance-feed-item__time">
-                IN: ${record.time_in || '-'} | OUT: ${record.time_out || '-'}
+        ${filterStatus === 'absent' ? $h`
+          ${absentStudents.length === 0 ? $h`
+            <${EmptyState}
+              icon="check_circle"
+              title="Perfect Attendance!"
+              message="All active students have attended on ${selectedDate}"
+            />
+          ` : absentStudents.map(student => $h`
+            <div class="attendance-feed-item absent-item">
+              <div class="attendance-feed-item__photo-placeholder">
+                <i class="icon material-icons">person_off</i>
               </div>
-              <div class="text-xs color-secondary mt-1">${record.course}</div>
-            </div>
-            <div>
-              <div class="badge badge-${record.status === 'present' ? 'success' : record.status === 'late' ? 'warning' : 'error'}">
-                ${record.status.toUpperCase()}
+              <div class="attendance-feed-item__info">
+                <div class="attendance-feed-item__name">${student.first_name} ${student.last_name}</div>
+                <div class="text-xs color-secondary mt-1">${student.course || ''} · ID: ${student.student_id}</div>
               </div>
-              ${record.confidence ? $h`<div class="text-xs color-secondary mt-1">${(record.confidence * 100).toFixed(0)}%</div>` : ''}
+              <div class="badge badge-error">ABSENT</div>
             </div>
-          </div>
-        `)}
+          `)}
+        ` : $h`
+          ${filteredRecords.length === 0 ? $h`
+            <${EmptyState}
+              icon="doc_text"
+              title="No Records Found"
+              message="${searchQuery ? 'No records match your search' : 'No attendance records for ' + selectedDate}"
+            />
+          ` : filteredRecords.map(record => $h`
+            <div class="attendance-feed-item" @click=${() => viewDetails(record.id)}>
+              <div class="attendance-feed-item__photo-placeholder">
+                <i class="icon material-icons">person</i>
+              </div>
+              <div class="attendance-feed-item__info">
+                <div class="attendance-feed-item__name">${record.name}</div>
+                <div class="attendance-feed-item__time">
+                  <span class="time-label time-in"><i class="icon material-icons" style="font-size:13px;vertical-align:middle;">login</i> ${record.time_in || '--:--'}</span>
+                  <span class="time-sep">·</span>
+                  <span class="time-label ${record.time_out ? 'time-out' : 'time-out-missing'}"><i class="icon material-icons" style="font-size:13px;vertical-align:middle;">logout</i> ${record.time_out || 'Not yet'}</span>
+                </div>
+                <div class="text-xs color-secondary mt-1">${record.course}</div>
+              </div>
+              <div class="flex-col items-end" style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
+                <div class="badge badge-${record.status === 'present' ? 'success' : record.status === 'late' ? 'warning' : record.status === 'early' ? 'info' : 'error'}">
+                  ${record.status ? record.status.toUpperCase() : ''}
+                </div>
+                ${!record.time_out ? $h`<div class="badge-still-in">Still In</div>` : ''}
+                ${record.confidence ? $h`<div class="text-xs color-secondary">${(record.confidence * 100).toFixed(0)}%</div>` : ''}
+              </div>
+            </div>
+          `)}
+        `}
       </div>
 
       <!-- Load More -->
@@ -123,8 +182,11 @@ export default (props, { $f7, $on, $onMounted, $update, $store, $h }) => {
   let records = [];
   let filteredRecords = [];
   let selectedDate = new Date().toLocaleDateString();
+  let currentDateISO = ''; // YYYY-MM-DD for navigation
   let filterStatus = 'all';
-  let stats = { present: 0, late: 0, absent: 0 };
+  let searchQuery = '';
+  let stats = { present: 0, late: 0, early: 0, absent: 0, stillIn: 0, timedOut: 0 };
+  let absentStudents = [];
   let hasMore = false;
   let page = 1;
   let pageSize = 20;
@@ -135,10 +197,23 @@ export default (props, { $f7, $on, $onMounted, $update, $store, $h }) => {
     await loadToday();
   });
 
+  // Reload when page comes back into view
+  $on('pageBeforeIn', async () => {
+    await loadAttendance(currentDateISO || (() => {
+      const now = new Date();
+      return `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+    })());
+  });
+
   // Load today's attendance
   async function loadToday() {
-    selectedDate = new Date().toLocaleDateString();
-    await loadAttendance(new Date().toISOString().split('T')[0]);
+    const now = new Date();
+    selectedDate = now.toLocaleDateString();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, '0');
+    const d = String(now.getDate()).padStart(2, '0');
+    currentDateISO = `${y}-${m}-${d}`;
+    await loadAttendance(currentDateISO);
   }
 
   // Load attendance for specific date
@@ -146,8 +221,12 @@ export default (props, { $f7, $on, $onMounted, $update, $store, $h }) => {
     try {
       $store.dispatch('setLoading', true);
       
-      const dateStr = typeof date === 'string' ? date : date.toISOString().split('T')[0];
-      const endDate = dateStr;
+      const dateStr = typeof date === 'string' ? date : (() => {
+        const y = date.getFullYear();
+        const mo = String(date.getMonth() + 1).padStart(2, '0');
+        const da = String(date.getDate()).padStart(2, '0');
+        return `${y}-${mo}-${da}`;
+      })();
       
       // Get attendance records (excluding large BLOB fields)
       const result = await database.query(`
@@ -172,9 +251,10 @@ export default (props, { $f7, $on, $onMounted, $update, $store, $h }) => {
       records = result.map(r => ({
         id: r.id,
         name: `${r.first_name} ${r.last_name}`,
+        studentIdStr: (r.sid || r.student_id || '').toString().toLowerCase(),
         studentId: r.student_id,
         course: r.course,
-        photo: null, // Exclude photo to avoid CursorWindow overflow
+        photo: null,
         time_in: r.time_in,
         time_out: r.time_out,
         status: r.status,
@@ -182,12 +262,15 @@ export default (props, { $f7, $on, $onMounted, $update, $store, $h }) => {
       }));
 
       // Calculate statistics
-      stats.present = records.filter(r => r.status === 'present').length;
-      stats.late = records.filter(r => r.status === 'late').length;
-      
-      const allStudents = await database.getAllStudents();
-      const presentIds = records.map(r => r.studentId);
-      stats.absent = allStudents.filter(s => !presentIds.includes(s.id)).length;
+      stats.present  = records.filter(r => r.status === 'present').length;
+      stats.late     = records.filter(r => r.status === 'late').length;
+      stats.early    = records.filter(r => r.status === 'early').length;
+      stats.stillIn  = records.filter(r => r.time_in && !r.time_out).length;
+      stats.timedOut = records.filter(r => r.time_in && r.time_out).length;
+
+      // Absent: active students with no attendance record for this date
+      absentStudents = await database.getAbsentStudents(dateStr);
+      stats.absent   = absentStudents.length;
 
       // Apply filter
       applyFilter();
@@ -201,13 +284,40 @@ export default (props, { $f7, $on, $onMounted, $update, $store, $h }) => {
     }
   }
 
-  // Apply status filter
+  // Apply status + search filter
   function applyFilter() {
-    if (filterStatus === 'all') {
-      filteredRecords = records;
-    } else {
-      filteredRecords = records.filter(r => r.status === filterStatus);
+    // 'absent' renders its own separate list — filteredRecords is not used
+    if (filterStatus === 'absent') {
+      filteredRecords = [];
+      return;
     }
+
+    let result = records;
+
+    // Status filter
+    if (filterStatus === 'present') {
+      result = result.filter(r => r.status === 'present');
+    } else if (filterStatus === 'late') {
+      result = result.filter(r => r.status === 'late');
+    } else if (filterStatus === 'early') {
+      result = result.filter(r => r.status === 'early');
+    } else if (filterStatus === 'still-in') {
+      result = result.filter(r => r.time_in && !r.time_out);
+    } else if (filterStatus === 'timed-out') {
+      result = result.filter(r => r.time_in && r.time_out);
+    }
+
+    // Search filter (name, student ID, or course)
+    if (searchQuery.trim()) {
+      const q = searchQuery.trim().toLowerCase();
+      result = result.filter(r =>
+        r.name.toLowerCase().includes(q) ||
+        (r.studentIdStr && r.studentIdStr.includes(q)) ||
+        (r.course && r.course.toLowerCase().includes(q))
+      );
+    }
+
+    filteredRecords = result;
   }
 
   // Set filter
@@ -217,19 +327,60 @@ export default (props, { $f7, $on, $onMounted, $update, $store, $h }) => {
     $update();
   };
 
+  // Handle search
+  const handleSearch = (e) => {
+    searchQuery = e.target.value;
+    applyFilter();
+    $update();
+  };
+
+  // Clear search
+  const clearSearch = () => {
+    searchQuery = '';
+    applyFilter();
+    $update();
+  };
+
+  // Navigate to previous day
+  const prevDay = () => {
+    if (!currentDateISO) return;
+    const d = new Date(currentDateISO + 'T00:00:00');
+    d.setDate(d.getDate() - 1);
+    currentDateISO = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    selectedDate = d.toLocaleDateString();
+    loadAttendance(currentDateISO);
+  };
+
+  // Navigate to next day (not beyond today)
+  const nextDay = () => {
+    if (!currentDateISO) return;
+    const now = new Date();
+    const today = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+    if (currentDateISO >= today) return; // Cannot go past today
+    const d = new Date(currentDateISO + 'T00:00:00');
+    d.setDate(d.getDate() + 1);
+    currentDateISO = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    selectedDate = d.toLocaleDateString();
+    loadAttendance(currentDateISO);
+  };
+
   // Show date picker
   const showDatePicker = () => {
     const calendarModal = $f7.calendar.create({
-      inputEl: '#date-picker-input',
       openIn: 'customModal',
       header: true,
       footer: true,
       dateFormat: 'yyyy-mm-dd',
+      value: currentDateISO ? [new Date(currentDateISO + 'T00:00:00')] : [new Date()],
       on: {
         change: function(calendar, value) {
-          selectedDate = new Date(value[0]).toLocaleDateString();
-          loadAttendance(value[0]);
-          $update();
+          if (value && value[0]) {
+            const d = value[0];
+            currentDateISO = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+            selectedDate = d.toLocaleDateString();
+            loadAttendance(currentDateISO);
+          }
+          calendar.close();
         }
       }
     });
@@ -416,114 +567,243 @@ export default (props, { $f7, $on, $onMounted, $update, $store, $h }) => {
 </script>
 
 <style scoped>
-.grid {
+/* ── Date Navigation ───────────────────────────────────────────── */
+/* Wrapper replaces .block so F7 block margins don't interfere     */
+.date-nav-wrapper {
+  padding: 8px 16px 4px;
+  box-sizing: border-box;
+  width: 100%;
+}
+
+/*
+  CSS Grid: 4 explicit columns.
+  Buttons get their natural size; label gets the rest.
+  Grid is far more reliable than flex on Android WebView because
+  each column's size is fully declared — no implicit min-content.
+*/
+.date-nav {
   display: grid;
-}
-
-.grid-cols-3 {
-  grid-template-columns: repeat(3, 1fr);
-}
-
-.gap-2 {
-  gap: var(--space-2);
-}
-
-.gap-3 {
-  gap: var(--space-3);
-}
-
-.chip {
-  --f7-chip-bg-color: #f5f5f5;
-  --f7-chip-text-color: var(--attendance-secondary);
-}
-
-.chip-outline {
-  --f7-chip-bg-color: var(--attendance-primary);
-  --f7-chip-text-color: white;
-}
-
-.ml-2 {
-  margin-left: var(--space-2);
-}
-
-.badge-success {
-  background: var(--attendance-success);
-  color: white;
-}
-
-.badge-warning {
-  background: var(--attendance-warning);
-  color: white;
-}
-
-.badge-error {
-  background: var(--attendance-error);
-  color: white;
-}
-
-.flex {
-  display: flex;
-}
-
-.flex-1 {
-  flex: 1;
-}
-
-.items-center {
+  grid-template-columns: 36px 1fr 36px 52px;
+  gap: 6px;
   align-items: center;
-}
-
-.p-3 {
-  padding: var(--space-3);
-}
-
-.rounded-full {
-  border-radius: 50%;
-}
-
-.avatar {
-  width: 48px;
-  height: 48px;
+  width: 100%;     /* critical: constrain to parent width */
+  box-sizing: border-box;
   background: var(--attendance-primary);
+  border-radius: var(--radius-lg);
+  padding: 6px;
+}
+
+/* Arrow buttons — occupy their fixed 36px column */
+.date-nav__btn {
+  width: 36px;
+  height: 36px;
+  background: rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: var(--radius-base);
+  color: #fff;
+  cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
+  padding: 0;
+  transition: background 0.15s;
+  -webkit-tap-highlight-color: transparent;
+}
+.date-nav__btn:active {
+  background: rgba(255, 255, 255, 0.35);
+}
+.date-nav__btn .material-icons {
+  font-size: 20px !important;
+  line-height: 1;
 }
 
-.avatar .icon {
-  color: white;
-  font-size: 24px;
+/* Date label — occupies 1fr column (fills remaining space) */
+.date-nav__label {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-width: 0;        /* allows grid item to shrink below content width */
+  text-decoration: none;
+  overflow: hidden;
 }
+.date-nav__cal-icon {
+  font-size: 14px !important;
+  color: rgba(255, 255, 255, 0.85);
+  flex-shrink: 0;
+  line-height: 1;
+}
+.date-nav__text {
+  font-size: 13px;
+  font-weight: 700;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  letter-spacing: 0.2px;
+}
+
+/* Today button — occupies fixed 52px column */
+.date-nav__today {
+  width: 52px;
+  height: 36px;
+  background: #fff;
+  color: var(--attendance-primary);
+  border: none;
+  border-radius: var(--radius-base);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  transition: opacity 0.15s;
+  -webkit-tap-highlight-color: transparent;
+}
+.date-nav__today:active {
+  opacity: 0.8;
+}
+
+/* No horizontal scroll on the overall page content */
+.page[data-name="attendance-records"] .page-content {
+  overflow-x: hidden;
+}
+
+/* Search bar */
+.searchbar-records {
+  display: flex;
+  align-items: center;
+  background: #f5f5f5;
+  border-radius: var(--radius-base);
+  border: 1.5px solid #e0e0e0;
+  padding: 6px 12px;
+  gap: var(--space-2);
+  transition: border-color 0.2s;
+}
+
+.searchbar-records:focus-within {
+  border-color: var(--attendance-primary);
+  background: white;
+}
+
+.searchbar-records__icon {
+  color: #999;
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.searchbar-records__input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  outline: none;
+  font-size: var(--font-base);
+  color: var(--attendance-secondary);
+}
+
+.searchbar-records__clear {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #999;
+  display: flex;
+  align-items: center;
+  padding: 0;
+}
+
+.searchbar-records__clear .material-icons { font-size: 18px; }
+
+/* Records count in block-title */
+.records-count {
+  font-size: var(--font-sm);
+  color: #999;
+  font-weight: 400;
+  margin-left: 4px;
+}
+
+/* Filter chips */
+.chip { --f7-chip-bg-color: #f5f5f5; --f7-chip-text-color: var(--attendance-secondary); }
+.chip-outline { --f7-chip-bg-color: var(--attendance-primary); --f7-chip-text-color: white; }
+.chip--in { --f7-chip-bg-color: rgba(76,175,80,0.1); --f7-chip-text-color: var(--attendance-primary); }
+.chip-outline-in { --f7-chip-bg-color: var(--attendance-primary); --f7-chip-text-color: white; }
+.chip--out { --f7-chip-bg-color: rgba(255,87,34,0.1); --f7-chip-text-color: var(--attendance-accent); }
+.chip-outline-out { --f7-chip-bg-color: var(--attendance-accent); --f7-chip-text-color: white; }
+.chip--early { --f7-chip-bg-color: rgba(33,150,243,0.12); --f7-chip-text-color: #2196F3; }
+.chip-outline-early { --f7-chip-bg-color: #2196F3; --f7-chip-text-color: white; }
+.chip--absent { --f7-chip-bg-color: rgba(244,67,54,0.1); --f7-chip-text-color: var(--attendance-error); }
+.chip-outline-absent { --f7-chip-bg-color: var(--attendance-error); --f7-chip-text-color: white; }
+
+/* Time labels in record row */
+.time-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: var(--font-sm);
+}
+
+.time-in { color: var(--attendance-primary); }
+.time-out { color: #555; }
+.time-out-missing { color: #f57c00; font-style: italic; }
+.time-sep { color: #ccc; margin: 0 4px; }
+
+/* Still-In badge */
+.badge-still-in {
+  font-size: 10px;
+  font-weight: 700;
+  background: rgba(255,152,0,0.15);
+  color: #f57c00;
+  border-radius: var(--radius-full);
+  padding: 2px 7px;
+}
+
+.badge-success { background: rgba(76,175,80,0.14); color: #2e7d32; border: 1px solid rgba(76,175,80,0.25); }
+.badge-warning { background: rgba(255,193,7,0.14); color: #b8860b; border: 1px solid rgba(255,193,7,0.25); }
+.badge-error   { background: rgba(244,67,54,0.12); color: #c62828; border: 1px solid rgba(244,67,54,0.20); }
+.badge-info    { background: rgba(33,150,243,0.12); color: #1565c0; border: 1px solid rgba(33,150,243,0.20); }
+
+/* Absent student row */
+.absent-item .attendance-feed-item__photo-placeholder {
+  background: #f0f0f0;
+  color: #bbb;
+}
+.flex { display: flex; }
+.flex-1 { flex: 1; }
+.items-center { align-items: center; }
+.p-3 { padding: var(--space-3); }
+.rounded-full { border-radius: 50%; }
 
 .attendance-feed-item__photo-placeholder {
-  width: 48px;
-  height: 48px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   background: linear-gradient(135deg, var(--attendance-primary), var(--attendance-secondary));
   color: white;
-  font-size: 24px;
+  font-size: 22px;
   flex-shrink: 0;
 }
 
 .attendance-feed-item {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-3);
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
   background: white;
   border-radius: var(--radius-md);
   margin-bottom: var(--space-2);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.07);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.15s ease;
+  border: 1px solid rgba(0,0,0,0.04);
 }
 
-.attendance-feed-item:hover {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
-  transform: translateY(-2px);
+.attendance-feed-item:active {
+  transform: scale(0.99);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
 }
 
 .attendance-feed-item__info {
@@ -533,13 +813,62 @@ export default (props, { $f7, $on, $onMounted, $update, $store, $h }) => {
 
 .attendance-feed-item__name {
   font-size: var(--font-md);
-  font-weight: 600;
+  font-weight: 700;
   color: var(--attendance-secondary);
-  margin-bottom: var(--space-1);
+  margin-bottom: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .attendance-feed-item__time {
-  font-size: var(--font-sm);
-  color: #666;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 2px;
+}
+
+/* Responsive tweaks for small screens */
+@media (max-width: 320px) {
+  .attendance-feed-item {
+    gap: 8px;
+    padding: 8px 10px;
+  }
+
+  .attendance-feed-item__photo-placeholder {
+    width: 36px;
+    height: 36px;
+    font-size: 18px;
+  }
+
+  .attendance-feed-item__name {
+    font-size: 13px;
+  }
+
+  .time-label {
+    font-size: 10px;
+  }
+
+  /* On very small screens shrink the grid columns slightly */
+  .date-nav {
+    grid-template-columns: 32px 1fr 32px 44px;
+    gap: 4px;
+    padding: 4px;
+  }
+  .date-nav__btn {
+    width: 32px;
+    height: 32px;
+  }
+  .date-nav__btn .material-icons {
+    font-size: 18px !important;
+  }
+  .date-nav__text {
+    font-size: 11px;
+  }
+  .date-nav__today {
+    width: 44px;
+    height: 32px;
+    font-size: 10px;
+  }
 }
 </style>

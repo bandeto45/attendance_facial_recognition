@@ -1,19 +1,20 @@
 <template>
-  <div class="toolbar toolbar-bottom tabbar">
+  <div class="toolbar toolbar-bottom tabbar" data-page-content="false">
     <div class="toolbar-inner">
-      <a href="/recognition/" class="tab-link ${activeTab === 'recognition' ? 'tab-link-active' : ''}" data-tab="recognition">
+      <a href="/recognition/" class="tab-link ${activeTab === 'recognition' ? 'tab-link-active' : ''}">
         <i class="icon material-icons">videocam</i>
         <span class="tabbar-label">Recognition</span>
       </a>
-      <a href="/attendance/records/" class="tab-link ${activeTab === 'attendance' ? 'tab-link-active' : ''}" data-tab="attendance">
-        <i class="icon material-icons">assignment</i>
-        <span class="tabbar-label">Attendance</span>
-      </a>
-      <a href="/students/" class="tab-link ${activeTab === 'students' ? 'tab-link-active' : ''}" data-tab="students">
-        <i class="icon material-icons">people</i>
-        <span class="tabbar-label">Students</span>
-      </a>
-     
+      ${isAdmin ? $h`
+        <a href="/attendance/records/" class="tab-link ${activeTab === 'attendance' ? 'tab-link-active' : ''}">
+          <i class="icon material-icons">assignment</i>
+          <span class="tabbar-label">Attendance</span>
+        </a>
+        <a href="/students/" class="tab-link ${activeTab === 'students' ? 'tab-link-active' : ''}">
+          <i class="icon material-icons">people</i>
+          <span class="tabbar-label">Students</span>
+        </a>
+      ` : ''}
     </div>
   </div>
 </template>
@@ -23,12 +24,28 @@
  * BottomToolbar - Main navigation toolbar for all pages
  * 
  * Props:
- * - activeTab (string): Currently active tab ('recognition', 'attendance', 'students', 'settings')
+ * - activeTab (string): Currently active tab ('recognition', 'attendance', 'students')
  *   Default: 'recognition'
+ * 
+ * Role-based visibility:
+ * - Admin: Recognition + Attendance + Students
+ * - Operator: Recognition only
  */
-export default (props, { $f7 }) => {
+export default (props, { $f7, $h }) => {
   const { activeTab = 'recognition' } = props;
-  
+
+  // Read role from session
+  let isAdmin = false;
+  try {
+    const userStr = localStorage.getItem('user');
+    if (userStr) {
+      const user = JSON.parse(userStr);
+      isAdmin = user.role === 'admin';
+    }
+  } catch (e) {
+    isAdmin = false;
+  }
+
   return $render;
 }
 </script>
@@ -37,18 +54,39 @@ export default (props, { $f7 }) => {
 .toolbar-bottom {
   --f7-toolbar-bg-color: var(--attendance-bg);
   --f7-toolbar-border-color: rgba(76, 175, 80, 0.2);
+  border-top: 1.5px solid rgba(76, 175, 80, 0.15);
+  box-shadow: 0 -2px 12px rgba(0, 0, 0, 0.07);
 }
 
 .tabbar .tab-link {
-  transition: color 0.3s ease;
+  transition: color 0.2s ease, background 0.2s ease;
+  border-radius: 10px 10px 0 0;
 }
 
 .tabbar .tab-link-active {
   color: var(--attendance-primary);
 }
 
+.tabbar .tab-link-active .material-icons {
+  transform: translateY(-1px);
+}
+
 .tabbar-label {
-  font-size: 11px;
+  font-size: 10px;
+  font-weight: 600;
   margin-top: 2px;
+  letter-spacing: 0.3px;
+}
+
+/* Compact on very small screens */
+@media (max-width: 320px) {
+  .tabbar-label {
+    font-size: 9px;
+    letter-spacing: 0;
+  }
+
+  .tabbar .tab-link .material-icons {
+    font-size: 20px;
+  }
 }
 </style>

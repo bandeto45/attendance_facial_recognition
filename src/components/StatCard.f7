@@ -1,7 +1,8 @@
 <template>
-  <div class="stat-card">
+  <div class="stat-card stat-card--${color}">
     <div class="stat-card__value">${value}</div>
     <div class="stat-card__label">${label}</div>
+    ${icon ? $h`<i class="material-icons stat-card__icon">${icon}</i>` : ''}
   </div>
 </template>
 
@@ -12,13 +13,96 @@
  * Props:
  * - value (number|string): Stat value
  * - label (string): Stat label
+ * - color (string): Accent color variant: 'green' | 'red' | 'blue' | 'orange' | 'default'
+ * - icon (string): Optional material icon name
  */
 export default (props) => {
   const { 
     value = 0,
-    label = 'Total'
+    label = 'Total',
+    color = 'default',
+    icon = null
   } = props;
   
   return $render;
 }
 </script>
+
+<style>
+.stat-card {
+  background: white;
+  border-radius: 12px;
+  padding: 14px 10px;
+  text-align: center;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.07);
+  position: relative;
+  overflow: hidden;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  border: 1.5px solid rgba(0,0,0,0.05);
+}
+
+.stat-card:active {
+  transform: scale(0.97);
+}
+
+.stat-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--attendance-primary);
+  border-radius: 12px 12px 0 0;
+}
+
+.stat-card--green::before { background: var(--attendance-primary); }
+.stat-card--red::before   { background: var(--attendance-error); }
+.stat-card--blue::before  { background: var(--attendance-info); }
+.stat-card--orange::before{ background: var(--attendance-warning); }
+.stat-card--default::before { background: var(--attendance-primary); }
+
+.stat-card__value {
+  font-size: 28px;
+  font-weight: 800;
+  color: var(--attendance-secondary);
+  line-height: 1.1;
+  margin-bottom: 4px;
+}
+
+.stat-card--green .stat-card__value  { color: var(--attendance-primary); }
+.stat-card--red .stat-card__value    { color: var(--attendance-error); }
+.stat-card--blue .stat-card__value   { color: var(--attendance-info); }
+.stat-card--orange .stat-card__value { color: var(--attendance-warning); }
+
+.stat-card__label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #999;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  margin-top: 2px;
+}
+
+.stat-card__icon {
+  font-size: 16px;
+  color: rgba(0,0,0,0.15);
+  margin-top: 4px;
+  display: block;
+}
+
+/* Compact for very small screens */
+@media (max-width: 320px) {
+  .stat-card {
+    padding: 10px 6px;
+  }
+
+  .stat-card__value {
+    font-size: 22px;
+  }
+
+  .stat-card__label {
+    font-size: 9px;
+  }
+}
+</style>

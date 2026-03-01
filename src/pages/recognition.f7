@@ -6,29 +6,89 @@
       <div class="navbar-inner">
         <div class="left">
           <a href="#" class="link icon-only" @click=${handleLogout}>
-            <i class="icon material-icons">arrow_back</i>
+            <i class="icon material-icons">logout</i>
           </a>
         </div>
         <div class="title">Live Recognition</div>
         <div class="right">
-          <a href="/settings/" class="link icon-only">
-            <i class="icon material-icons">settings</i>
-          </a>
+          ${isAdmin ? $h`
+            <a href="#" class="link icon-only" @click=${openScheduleSettings}>
+              <i class="icon material-icons">schedule</i>
+            </a>
+          ` : ''}
+          <span class="role-badge ${isAdmin ? 'role-admin' : 'role-operator'}">${isAdmin ? 'ADMIN' : 'OPERATOR'}</span>
         </div>
       </div>
     </div>
 
-    <!-- Camera Viewfinder -->
+    <!-- Page Content -->
     <div class="page-content">
+
+      <!-- Live Clock -->
+      <div class="clock-card">
+        <div class="clock-time">${currentTime}</div>
+        <div class="clock-date">${currentDate}</div>
+      </div>
+
+      <!-- Schedule Status Strip -->
+      ${scheduleSettings.timeIn ? $h`
+        <div class="schedule-strip">
+          <div class="schedule-strip__item">
+            <i class="icon material-icons schedule-strip__icon">login</i>
+            <span class="schedule-strip__label">On-Time From</span>
+            <span class="schedule-strip__value">${scheduleSettings.timeIn}</span>
+          </div>
+          <div class="schedule-strip__divider"></div>
+          <div class="schedule-strip__item">
+            <i class="icon material-icons schedule-strip__icon">schedule</i>
+            <span class="schedule-strip__label">Late After</span>
+            <span class="schedule-strip__value">${scheduleSettings.lateAfter}</span>
+          </div>
+          <div class="schedule-strip__divider"></div>
+          <div class="schedule-strip__item">
+            <span class="schedule-strip__label">Now</span>
+            <span class="schedule-status schedule-status--${currentStatusType}">${currentStatusLabel}</span>
+          </div>
+        </div>
+      ` : ''}
+
+      <!-- Action Buttons -->
       <div class="recognition-actions-header">
         <button class="icon-selection-btn ${manualMode === 'in' ? 'icon-selection-btn--active' : ''}" @click=${() => startManual('in')}>
           <i class="icon material-icons icon-lg">login</i>
           <span class="icon-label">Time In</span>
         </button>
-        <button class="icon-selection-btn ${manualMode === 'out' ? 'icon-selection-btn--active' : ''}" @click=${() => startManual('out')}>
+        <button class="icon-selection-btn icon-selection-btn--out ${manualMode === 'out' ? 'icon-selection-btn--active-out' : ''}" @click=${() => startManual('out')}>
           <i class="icon material-icons icon-lg">logout</i>
           <span class="icon-label">Time Out</span>
         </button>
+      </div>
+
+      <!-- Recent Attendance Feed -->
+      <div class="block-title mt-3">
+        Today's Activity 
+        <span class="recent-count">${recentAttendance.length}</span>
+      </div>
+      <div class="block">
+        ${recentAttendance.length === 0 ? $h`
+          <div class="empty-feed">
+            <i class="icon material-icons">event_note</i>
+            <p>No activity recorded today yet</p>
+          </div>
+        ` : recentAttendance.map(r => $h`
+          <div class="feed-item feed-item--${r.status}">
+            <div class="feed-item__icon">
+              <i class="icon material-icons">${r.status === 'in' ? 'login' : 'logout'}</i>
+            </div>
+            <div class="feed-item__info">
+              <div class="feed-item__name">${r.name}</div>
+              <div class="feed-item__time">${r.time}</div>
+            </div>
+            <div class="feed-item__badge badge-${r.status === 'in' ? 'success' : 'error'}">
+              ${r.status === 'in' ? 'IN' : 'OUT'}
+            </div>
+          </div>
+        `)}
       </div>
 
     </div>
@@ -40,49 +100,77 @@
 
 <script>
 import BottomToolbar from '../components/BottomToolbar.f7';
-import cameraManager from '../js/utils/camera.js';
-import faceDetection from '../js/utils/faceDetection.js';
 import db from '../js/utils/database.js';
 
 export default (props, { $f7, $on, $onMounted, $onBeforeUnmount, $update, $h }) => {
   let isCordova = !!window.cordova;
   let currentDate = '';
   let currentTime = '';
-  let flashOn = false;
   let recognitionStatus = '';
   let recentAttendance = [];
   let timeInterval = null;
-
-  let cameraStarted = false;
   let manualMode = '';
 
-  let cameraReady = false;
-  let cameraError = '';
+  // Schedule settings state
+  let scheduleSettings = { timeIn: '', lateAfter: '' };
+  let currentStatusLabel = '—';   // 'EARLY' | 'ON TIME' | 'LATE' | '—'
+  let currentStatusType  = '';    // 'early' | 'present' | 'late' | ''
+
+  // Read role from session
+  let isAdmin = false;
+  try {
+    const u = localStorage.getItem('user');
+    if (u) isAdmin = JSON.parse(u).role === 'admin';
+  } catch (e) { /* ignore */ }
+
   const lastSeenMap = new Map();
-  const CONFIDENCE_THRESHOLD = 0.6;
   const DUP_WINDOW_MS = 30000; // 30s duplicate suppression
-  const showToast = (text, timeout = 2000) => {
-    $f7.toast.create({
-      text,
-      position: 'center',
-      closeTimeout: timeout,
-    }).open();
+
+  // ── Compute what status a time-in RIGHT NOW would get ────────────────────
+  const computeScheduleStatus = () => {
+    const { timeIn, lateAfter } = scheduleSettings;
+    if (!timeIn || !lateAfter) {
+      currentStatusLabel = '—';
+      currentStatusType  = '';
+      return;
+    }
+    const now = new Date();
+    const current  = now.getHours() * 60 + now.getMinutes();
+    const [iH, iM] = timeIn.split(':').map(Number);
+    const [lH, lM] = lateAfter.split(':').map(Number);
+    const onTime   = iH * 60 + iM;
+    const lateAt   = lH * 60 + lM;
+    if      (current < onTime)  { currentStatusLabel = 'EARLY';   currentStatusType = 'early';   }
+    else if (current > lateAt)  { currentStatusLabel = 'LATE';    currentStatusType = 'late';    }
+    else                        { currentStatusLabel = 'ON TIME'; currentStatusType = 'present'; }
   };
 
+  // ── Load schedule from DB ─────────────────────────────────────────────────
+  const loadSchedule = async () => {
+    try {
+      scheduleSettings = await db.getScheduleSettings();
+      computeScheduleStatus();
+      $update();
+    } catch (e) {
+      console.warn('Could not load schedule settings:', e);
+    }
+  };
 
   const updateTime = () => {
     const now = new Date();
-    currentDate = now.toLocaleDateString('en-US', { 
-      weekday: 'short', 
-      month: 'short', 
-      day: 'numeric', 
-      year: 'numeric' 
+    currentDate = now.toLocaleDateString('en-US', {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric'
     });
-    currentTime = now.toLocaleTimeString('en-US', { 
-      hour: '2-digit', 
+    currentTime = now.toLocaleTimeString('en-US', {
+      hour: '2-digit',
       minute: '2-digit',
       second: '2-digit'
     });
+    // Recompute live schedule status every second
+    computeScheduleStatus();
     $update();
   };
 
@@ -96,12 +184,20 @@ export default (props, { $f7, $on, $onMounted, $onBeforeUnmount, $update, $h }) 
   const loadRecentAttendance = () => {
     db.getTodayAttendance()
       .then((rows) => {
-        recentAttendance = rows.map((r) => ({
-          name: `${r.first_name || ''} ${r.last_name || ''}`.trim() || r.student_id,
-          studentId: r.student_id,
-          time: r.time_in || r.time_out || '',
-          status: r.time_out ? 'out' : 'in',
-        }));
+        // Build flat list: separate entry for each time-in and time-out
+        const feed = [];
+        rows.forEach(r => {
+          const name = `${r.first_name || ''} ${r.last_name || ''}`.trim() || r.student_id;
+          if (r.time_in) {
+            feed.push({ name, studentId: r.student_id, time: r.time_in, status: 'in', sortKey: r.time_in });
+          }
+          if (r.time_out) {
+            feed.push({ name, studentId: r.student_id, time: r.time_out, status: 'out', sortKey: r.time_out });
+          }
+        });
+        // Sort most recent first
+        feed.sort((a, b) => b.sortKey.localeCompare(a.sortKey));
+        recentAttendance = feed.slice(0, 20);
         $update();
       })
       .catch((err) => {
@@ -109,77 +205,68 @@ export default (props, { $f7, $on, $onMounted, $onBeforeUnmount, $update, $h }) 
       });
   };
 
-  const handleRecognitionResult = async (match) => {
-    if (!match?.matched || !match.student) return;
-    const now = Date.now();
-    const last = lastSeenMap.get(match.student.id);
-    if (last && now - last < DUP_WINDOW_MS) return;
-    lastSeenMap.set(match.student.id, now);
-
-    try {
-      const attendancePhoto = await cameraManager.captureFrame();
-      const existing = await db.getTodayRecordForStudent(match.student.id);
-      let status = 'in';
-
-      if (manualMode === 'in') {
-        if (existing) {
-          showToast('Student already checked in today');
-          return;
-        }
-        const result = await db.recordTimeIn(match.student.id, match.confidence || 0, attendancePhoto);
-        if (result?.success === false) {
-          showToast(result.message || 'Unable to record time-in');
-          return;
-        }
-        status = 'in';
-      } else if (manualMode === 'out') {
-        if (!existing) {
-          showToast('No time-in found for today');
-          return;
-        }
-        if (existing.time_out) {
-          showToast('Student already checked out');
-          return;
-        }
-        await db.recordTimeOut(match.student.id, match.confidence || 0, attendancePhoto);
-        status = 'out';
-      } else {
-        if (!existing) {
-          await db.recordTimeIn(match.student.id, match.confidence || 0, attendancePhoto);
-          status = 'in';
-        } else if (!existing.time_out) {
-          await db.recordTimeOut(match.student.id, match.confidence || 0, attendancePhoto);
-          status = 'out';
-        } else {
-          await db.recordTimeIn(match.student.id, match.confidence || 0, attendancePhoto);
-          status = 'in';
-        }
-      }
-
-      const fullName = `${match.student.first_name || ''} ${match.student.last_name || ''}`.trim() || match.student.name || 'Student';
-      recognitionStatus = `${fullName} ${status === 'in' ? 'checked in' : 'checked out'}`;
-      recentAttendance = [
-        {
-          name: fullName,
-          studentId: match.student.student_id || match.student.id,
-          time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-          status: status,
-        },
-        ...recentAttendance,
-      ].slice(0, 10);
-      $update();
-    } catch (err) {
-      console.error('Record attendance error:', err);
-      cameraError = err?.message || 'Failed to record attendance';
-      $update();
-    }
-  };
+  // Reload data every time the page becomes visible (e.g. returning from camera)
+  $on('pageBeforeIn', () => {
+    loadRecentAttendance();
+    loadSchedule();  // picks up any schedule changes saved in settings dialog
+  });
 
   const startManual = async (mode) => {
     manualMode = mode;
     recognitionStatus = '';
-    // Navigate to camera page with mode as path parameter
     $f7.views.main.router.navigate(`/camera/${mode}/`);
+  };
+
+  // ── Schedule Settings (admin only) ────────────────────────────────────────
+  const openScheduleSettings = async () => {
+    await db.init();
+    const s = await db.getScheduleSettings();
+    $f7.dialog.create({
+      title: 'Schedule Settings',
+      content: `
+        <div style="padding:8px 4px 0;">
+          <p style="font-size:12px;color:#888;margin:0 0 14px;">
+            Only the <strong>first</strong> time-in each day is evaluated against these times.
+          </p>
+          <label style="font-size:13px;font-weight:600;display:block;margin-bottom:4px;">On-Time From</label>
+          <input id="sched-time-in" type="time" value="${s.timeIn}"
+            style="width:100%;padding:8px 10px;border:1.5px solid #e0e0e0;border-radius:8px;font-size:16px;margin-bottom:14px;box-sizing:border-box;"/>
+          <label style="font-size:13px;font-weight:600;display:block;margin-bottom:4px;">Late After</label>
+          <input id="sched-late-after" type="time" value="${s.lateAfter}"
+            style="width:100%;padding:8px 10px;border:1.5px solid #e0e0e0;border-radius:8px;font-size:16px;box-sizing:border-box;"/>
+          <p style="font-size:11px;color:#999;margin:8px 0 0;">
+            Before On-Time = <b>Early</b> &nbsp;·&nbsp; Within window = <b>Present</b> &nbsp;·&nbsp; After Late After = <b>Late</b>
+          </p>
+        </div>
+      `,
+      buttons: [
+        { text: 'Cancel', color: 'red' },
+        {
+          text: 'Save',
+          bold: true,
+          onClick: async () => {
+            const ti = document.getElementById('sched-time-in').value;
+            const la = document.getElementById('sched-late-after').value;
+            if (!ti || !la) {
+              $f7.toast.create({ text: 'Please fill both times', position: 'center', closeTimeout: 2000 }).open();
+              return;
+            }
+            if (la <= ti) {
+              $f7.toast.create({ text: '"Late After" must be later than "On-Time From"', position: 'center', closeTimeout: 2500 }).open();
+              return;
+            }
+            await db.setSetting('schedule_time_in', ti);
+            await db.setSetting('schedule_late_after', la);
+            await loadSchedule(); // refresh live strip immediately
+            $f7.toast.create({
+              text: `✅ Schedule saved — on-time: ${ti}, late after: ${la}`,
+              position: 'center',
+              closeTimeout: 2500
+            }).open();
+          }
+        }
+      ]
+    }).open();
   };
 
   $onMounted(async () => {
@@ -206,9 +293,8 @@ export default (props, { $f7, $on, $onMounted, $onBeforeUnmount, $update, $h }) 
 
     updateTime();
     timeInterval = setInterval(updateTime, 1000);
+    await loadSchedule();
     loadRecentAttendance();
-
-    // Camera will start when user taps Time In or Time Out
   });
 
   $onBeforeUnmount(() => {
@@ -232,19 +318,139 @@ export default (props, { $f7, $on, $onMounted, $onBeforeUnmount, $update, $h }) 
   color: white;
 }
 
-.no-padding {
-  padding: 0;
+.role-badge {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  padding: 3px 10px;
+  border-radius: var(--radius-full);
+  margin-right: var(--space-2);
 }
 
+.role-admin {
+  background: rgba(255,255,255,0.25);
+  color: white;
+  border: 1px solid rgba(255,255,255,0.5);
+}
 
+.role-operator {
+  background: rgba(255,152,0,0.35);
+  color: #fff3e0;
+  border: 1px solid rgba(255,152,0,0.6);
+}
+
+/* Live Clock */
+.clock-card {
+  background: linear-gradient(135deg, var(--attendance-primary) 0%, #2e7d32 100%);
+  color: white;
+  text-align: center;
+  padding: var(--space-5) var(--space-4);
+  margin: var(--space-3);
+  border-radius: var(--radius-xl);
+  box-shadow: 0 6px 20px rgba(76,175,80,0.35);
+}
+
+.clock-time {
+  font-size: var(--font-4xl);
+  font-weight: 700;
+  letter-spacing: 2px;
+  line-height: 1;
+}
+
+.clock-date {
+  font-size: var(--font-sm);
+  font-weight: 500;
+  opacity: 0.85;
+  margin-top: var(--space-2);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+/* Schedule Status Strip */
+.schedule-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: white;
+  border-radius: var(--radius-md);
+  margin: 0 var(--space-3) var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+  border: 1px solid #f0f0f0;
+}
+
+.schedule-strip__item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  flex: 1;
+}
+
+.schedule-strip__icon {
+  font-size: 16px;
+  color: var(--attendance-primary);
+}
+
+.schedule-strip__label {
+  font-size: 10px;
+  color: #aaa;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.schedule-strip__value {
+  font-size: var(--font-md);
+  font-weight: 700;
+  color: var(--attendance-secondary);
+  letter-spacing: 0.5px;
+}
+
+.schedule-strip__divider {
+  width: 1px;
+  height: 36px;
+  background: #eee;
+  flex-shrink: 0;
+}
+
+/* Live status pill */
+.schedule-status {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  padding: 4px 12px;
+  border-radius: var(--radius-full);
+  text-transform: uppercase;
+}
+
+.schedule-status--early {
+  background: rgba(33, 150, 243, 0.12);
+  color: #2196F3;
+}
+
+.schedule-status--present {
+  background: rgba(76, 175, 80, 0.15);
+  color: var(--attendance-primary);
+}
+
+.schedule-status--late {
+  background: rgba(244, 67, 54, 0.12);
+  color: var(--attendance-error, #F44336);
+}
+
+.schedule-status-- {
+  background: #f5f5f5;
+  color: #aaa;
+}
+
+/* Action buttons */
 .recognition-actions-header {
   display: flex;
   align-items: center;
   gap: var(--space-4);
   flex-wrap: wrap;
-  padding: var(--space-4);
-  background: var(--attendance-bg);
-  border-bottom: 2px solid rgba(0, 0, 0, 0.08);
+  padding: var(--space-3) var(--space-4);
   justify-content: center;
 }
 
@@ -254,15 +460,19 @@ export default (props, { $f7, $on, $onMounted, $onBeforeUnmount, $update, $h }) 
   align-items: center;
   justify-content: center;
   gap: var(--space-2);
-  padding: var(--space-4) var(--space-5);
+  padding: var(--space-5) var(--space-7);
   border-radius: var(--radius-xl);
-  border: none;
-  background: rgba(76, 175, 80, 0.08);
+  border: 2px solid rgba(76, 175, 80, 0.25);
+  background: rgba(76, 175, 80, 0.06);
   color: var(--attendance-secondary);
   cursor: pointer;
   transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-  position: relative;
-  overflow: hidden;
+  min-width: 130px;
+}
+
+.icon-selection-btn--out {
+  border-color: rgba(255, 87, 34, 0.25);
+  background: rgba(255, 87, 34, 0.06);
 }
 
 .icon-lg {
@@ -272,8 +482,8 @@ export default (props, { $f7, $on, $onMounted, $onBeforeUnmount, $update, $h }) 
 
 .icon-label {
   font-size: var(--font-sm);
-  font-weight: 600;
-  letter-spacing: 0.5px;
+  font-weight: 700;
+  letter-spacing: 1px;
   text-transform: uppercase;
 }
 
@@ -281,22 +491,22 @@ export default (props, { $f7, $on, $onMounted, $onBeforeUnmount, $update, $h }) 
   transform: scale(0.95);
 }
 
-.icon-selection-btn:hover:not(.icon-selection-btn--active) {
-  background: rgba(76, 175, 80, 0.15);
-}
-
 .icon-selection-btn--active {
-  background: linear-gradient(135deg, var(--attendance-primary) 0%, rgba(76, 175, 80, 0.85) 100%);
+  background: linear-gradient(135deg, var(--attendance-primary) 0%, #388e3c 100%);
+  border-color: var(--attendance-primary);
   color: white;
-  box-shadow: 0 8px 24px rgba(76, 175, 80, 0.35);
+  box-shadow: 0 8px 24px rgba(76, 175, 80, 0.4);
 }
 
-.icon-selection-btn--active:hover {
-  box-shadow: 0 10px 28px rgba(76, 175, 80, 0.45);
-  transform: translateY(-2px);
+.icon-selection-btn--active-out {
+  background: linear-gradient(135deg, var(--attendance-accent) 0%, #bf360c 100%);
+  border-color: var(--attendance-accent);
+  color: white;
+  box-shadow: 0 8px 24px rgba(255, 87, 34, 0.4);
 }
 
-.icon-selection-btn--active .icon-lg {
+.icon-selection-btn--active .icon-lg,
+.icon-selection-btn--active-out .icon-lg {
   animation: iconPulse 0.6s ease-out;
 }
 
@@ -306,4 +516,124 @@ export default (props, { $f7, $on, $onMounted, $onBeforeUnmount, $update, $h }) 
   100% { transform: scale(1); opacity: 1; }
 }
 
+/* Recent attendance feed */
+.block-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.recent-count {
+  background: var(--attendance-primary);
+  color: white;
+  border-radius: var(--radius-full);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 1px 7px;
+  min-width: 20px;
+  text-align: center;
+}
+
+.empty-feed {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: var(--space-7) var(--space-4);
+  color: #aaa;
+  gap: var(--space-2);
+}
+
+.empty-feed .material-icons {
+  font-size: 48px;
+  opacity: 0.4;
+}
+
+.empty-feed p {
+  font-size: var(--font-sm);
+  margin: 0;
+}
+
+.feed-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  background: white;
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-2);
+  box-shadow: 0 2px 6px rgba(0,0,0,0.07);
+  border-left: 4px solid transparent;
+  transition: transform 0.2s ease;
+}
+
+.feed-item--in {
+  border-left-color: var(--attendance-primary);
+}
+
+.feed-item--out {
+  border-left-color: var(--attendance-accent);
+}
+
+.feed-item__icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.feed-item--in .feed-item__icon {
+  background: rgba(76, 175, 80, 0.12);
+  color: var(--attendance-primary);
+}
+
+.feed-item--out .feed-item__icon {
+  background: rgba(255, 87, 34, 0.12);
+  color: var(--attendance-accent);
+}
+
+.feed-item__info {
+  flex: 1;
+  min-width: 0;
+}
+
+.feed-item__name {
+  font-size: var(--font-md);
+  font-weight: 600;
+  color: var(--attendance-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.feed-item__time {
+  font-size: var(--font-sm);
+  color: #888;
+  margin-top: 2px;
+}
+
+.feed-item__badge {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  padding: 3px 10px;
+  border-radius: var(--radius-full);
+  flex-shrink: 0;
+}
+
+.badge-success {
+  background: rgba(76, 175, 80, 0.15);
+  color: var(--attendance-primary);
+}
+
+.badge-error {
+  background: rgba(255, 87, 34, 0.15);
+  color: var(--attendance-accent);
+}
+
+.mt-3 {
+  margin-top: var(--space-3);
+}
 </style>

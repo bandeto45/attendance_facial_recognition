@@ -19,16 +19,22 @@
     </div>
 
     <!-- Searchbar -->
-    <form class="searchbar searchbar-inline">
-      <div class="searchbar-inner">
-        <div class="searchbar-input-wrap">
-          <input type="search" placeholder="Search students..." @input=${handleSearch} />
-          <i class="searchbar-icon"></i>
-          <span class="input-clear-button"></span>
-        </div>
-        <span class="searchbar-disable-button">Cancel</span>
+    <div class="searchbar-wrap">
+      <div class="searchbar-students">
+        <i class="icon material-icons">search</i>
+        <input
+          type="search"
+          placeholder="Search by name, ID, or course..."
+          value="${searchQuery}"
+          @input=${handleSearch}
+        />
+        ${searchQuery ? $h`
+          <button class="searchbar-clear" @click=${clearSearch}>
+            <i class="icon material-icons">close</i>
+          </button>
+        ` : ''}
       </div>
-    </form>
+    </div>
 
     <!-- Page Content -->
     <div class="page-content">
@@ -44,22 +50,41 @@
           <a href="#" class="chip ${filterStatus === 'inactive' ? 'chip-outline' : ''}" @click=${() => setFilter('inactive')}>
             <div class="chip-label">Inactive (${inactiveCount})</div>
           </a>
+          <a href="#" class="chip chip--trained ${filterStatus === 'trained' ? 'chip-outline-trained' : ''}" @click=${() => setFilter('trained')}>
+            <div class="chip-label">Trained (${withEncodingCount})</div>
+          </a>
+          <a href="#" class="chip chip--untrained ${filterStatus === 'untrained' ? 'chip-outline-untrained' : ''}" @click=${() => setFilter('untrained')}>
+            <div class="chip-label">Untrained (${students.length - withEncodingCount})</div>
+          </a>
+        </div>
+        <!-- Sort Row -->
+        <div class="flex gap-2 mt-2 items-center">
+          <span class="sort-label">Sort:</span>
+          <a href="#" class="chip chip-sm ${sortOrder === 'name-asc' ? 'chip-outline' : ''}" @click=${() => setSort('name-asc')}>
+            <div class="chip-label">Name A-Z</div>
+          </a>
+          <a href="#" class="chip chip-sm ${sortOrder === 'name-desc' ? 'chip-outline' : ''}" @click=${() => setSort('name-desc')}>
+            <div class="chip-label">Name Z-A</div>
+          </a>
+          <a href="#" class="chip chip-sm ${sortOrder === 'id-asc' ? 'chip-outline' : ''}" @click=${() => setSort('id-asc')}>
+            <div class="chip-label">ID</div>
+          </a>
         </div>
       </div>
 
       <!-- Statistics -->
       <div class="block">
-        <div class="grid grid-cols-3 gap-3">
-          <${StatCard} value=${students.length} label="Total" />
-          <${StatCard} value=${activeCount} label="Active" />
-          <${StatCard} value=${withEncodingCount} label="With Encoding" />
+        <div class="grid grid-cols-3 gap-2">
+          <${StatCard} value=${students.length} label="Total" color="default" />
+          <${StatCard} value=${activeCount} label="Active" color="green" />
+          <${StatCard} value=${withEncodingCount} label="Trained" color="blue" />
         </div>
       </div>
 
       <!-- Students List -->
       <div class="block-title">
-        ${filterStatus === 'all' ? 'All Students' : filterStatus.charAt(0).toUpperCase() + filterStatus.slice(1) + ' Students'} 
-        (${filteredStudents.length})
+        ${filterStatus === 'all' ? 'All Students' : filterStatus === 'trained' ? 'Trained Students' : filterStatus === 'untrained' ? 'Untrained Students' : filterStatus.charAt(0).toUpperCase() + filterStatus.slice(1) + ' Students'}
+        <span class="students-count">(${filteredStudents.length}${searchQuery ? ' of ' + students.length : ''})</span>
       </div>
       <div class="block">
         ${loading ? $h`
@@ -78,27 +103,27 @@
               <i class="icon material-icons">person</i>
             </div>
             <div class="student-card__info">
-              <div class="student-card__name">${student.first_name} ${student.last_name}</div>
-              <div class="student-card__details">
-                ${student.student_id} • ${student.course} • Year ${student.year_level}
+              <div class="student-card__name truncate">${student.first_name} ${student.last_name}</div>
+              <div class="student-card__details truncate">
+                ${student.student_id} · ${student.course} · Yr ${student.year_level}
               </div>
-              <div class="flex items-center gap-2 mt-2">
+              <div class="flex items-center flex-wrap gap-1 mt-1">
                 <span class="badge badge-${student.status === 'active' ? 'success' : 'error'}">
-                  ${student.status.toUpperCase()}
+                  ${student.status === 'active' ? 'Active' : 'Inactive'}
                 </span>
                 ${student.face_encoding ? $h`
                   <span class="badge badge-info">
                     <i class="icon material-icons" style="font-size: 10px;">verified_user</i>
                     Trained
                   </span>
-                ` : ''}
+                ` : $h`<span class="badge badge-warning">Untrained</span>`}
               </div>
             </div>
             <div class="student-card__actions">
-              <button class="button button-small button-fill" @click=${(e) => editStudent(e, student.id)}>
+              <button class="button button-small button-tonal" @click=${(e) => editStudent(e, student.id)}>
                 <i class="icon material-icons">edit</i>
               </button>
-              <button class="button button-small button-fill color-red" @click=${(e) => deleteStudent(e, student)}>
+              <button class="button button-small button-tonal color-red" @click=${(e) => deleteStudent(e, student)}>
                 <i class="icon material-icons">delete</i>
               </button>
             </div>
@@ -106,13 +131,13 @@
         `)}
       </div>
 
-      <!-- Import Option -->
-      <div class="block">
+      <!-- Import Excel is to be remove -->
+      <!-- <div class="block">
         <button class="button button-outline button-large w-full" @click=${handleImport}>
           <i class="icon material-icons mr-2">get_app</i>
           Import from Excel/CSV
         </button>
-      </div>
+      </div> -->
     </div>
 
     <!-- Bottom Toolbar -->
@@ -133,6 +158,7 @@ export default (props, { $f7, $on, $onMounted, $onBeforeUnmount, $update, $store
   let filteredStudents = [];
   let searchQuery = '';
   let filterStatus = 'all';
+  let sortOrder = 'name-asc';
   let loading = true;
   let activeCount = 0;
   let inactiveCount = 0;
@@ -189,20 +215,37 @@ export default (props, { $f7, $on, $onMounted, $onBeforeUnmount, $update, $store
   function applyFilters() {
     let result = students;
 
-    // Apply status filter
-    if (filterStatus !== 'all') {
-      result = result.filter(s => s.status === filterStatus);
+    // Apply status / encoding filter
+    if (filterStatus === 'active') {
+      result = result.filter(s => s.status === 'active');
+    } else if (filterStatus === 'inactive') {
+      result = result.filter(s => s.status === 'inactive');
+    } else if (filterStatus === 'trained') {
+      result = result.filter(s => !!s.face_encoding);
+    } else if (filterStatus === 'untrained') {
+      result = result.filter(s => !s.face_encoding);
     }
 
-    // Apply search filter
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase();
-      result = result.filter(s => 
-        s.first_name.toLowerCase().includes(query) ||
-        s.last_name.toLowerCase().includes(query) ||
-        s.student_id.toLowerCase().includes(query) ||
-        s.course.toLowerCase().includes(query)
+    // Apply search filter (name, student ID, course)
+    if (searchQuery.trim()) {
+      const query = searchQuery.trim().toLowerCase();
+      result = result.filter(s =>
+        `${s.first_name} ${s.last_name}`.toLowerCase().includes(query) ||
+        (s.student_id || '').toLowerCase().includes(query) ||
+        (s.course || '').toLowerCase().includes(query)
       );
+    }
+
+    // Sort
+    if (sortOrder === 'name-asc') {
+      result = [...result].sort((a, b) =>
+        `${a.last_name} ${a.first_name}`.localeCompare(`${b.last_name} ${b.first_name}`));
+    } else if (sortOrder === 'name-desc') {
+      result = [...result].sort((a, b) =>
+        `${b.last_name} ${b.first_name}`.localeCompare(`${a.last_name} ${a.first_name}`));
+    } else if (sortOrder === 'id-asc') {
+      result = [...result].sort((a, b) =>
+        (a.student_id || '').localeCompare(b.student_id || ''));
     }
 
     filteredStudents = result;
@@ -214,8 +257,20 @@ export default (props, { $f7, $on, $onMounted, $onBeforeUnmount, $update, $store
     $update();
   };
 
+  const clearSearch = () => {
+    searchQuery = '';
+    applyFilters();
+    $update();
+  };
+
   const setFilter = (status) => {
     filterStatus = status;
+    applyFilters();
+    $update();
+  };
+
+  const setSort = (order) => {
+    sortOrder = order;
     applyFilters();
     $update();
   };
@@ -302,58 +357,94 @@ export default (props, { $f7, $on, $onMounted, $onBeforeUnmount, $update, $store
   --f7-navbar-text-color: white;
   --f7-navbar-link-color: white;
 }
+.navbar .material-icons { color: white; }
 
-.navbar .material-icons {
-  color: white;
+/* Inline search bar */
+.searchbar-wrap {
+  padding: var(--space-2) var(--space-3);
+  background: white;
+  border-bottom: 1px solid #e0e0e0;
 }
 
-.searchbar {
-  --f7-searchbar-bg-color: white;
-  --f7-searchbar-input-bg-color: #f5f5f5;
-  --f7-searchbar-input-text-color: var(--attendance-secondary);
-  --f7-searchbar-border-color: #e0e0e0;
-  margin: 0;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
-}
-
-.chip {
-  --f7-chip-bg-color: #f5f5f5;
-  --f7-chip-text-color: var(--attendance-secondary);
-}
-
-.chip-outline {
-  --f7-chip-bg-color: var(--attendance-primary);
-  --f7-chip-text-color: white;
-}
-
-.mr-2 {
-  margin-right: var(--space-2);
-}
-
-.mt-2 {
-  margin-top: var(--space-2);
-}
-
-.grid {
-  display: grid;
-}
-
-.grid-cols-3 {
-  grid-template-columns: repeat(3, 1fr);
-}
-
-.gap-2 {
+.searchbar-students {
+  display: flex;
+  align-items: center;
+  background: #f5f5f5;
+  border-radius: var(--radius-base);
+  border: 1.5px solid #e0e0e0;
+  padding: 7px 12px;
   gap: var(--space-2);
+  transition: border-color 0.2s;
 }
 
-.gap-3 {
-  gap: var(--space-3);
+.searchbar-students:focus-within {
+  border-color: var(--attendance-primary);
+  background: white;
 }
 
-.w-full {
-  width: 100%;
+.searchbar-students .material-icons {
+  color: #999;
+  font-size: 20px;
+  flex-shrink: 0;
 }
 
+.searchbar-students input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  outline: none;
+  font-size: var(--font-base);
+  color: var(--attendance-secondary);
+}
+
+.searchbar-clear {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #999;
+  display: flex;
+  align-items: center;
+  padding: 0;
+}
+
+.searchbar-clear .material-icons { font-size: 18px; }
+
+/* Students count in block-title */
+.students-count {
+  font-size: var(--font-sm);
+  color: #999;
+  font-weight: 400;
+  margin-left: 4px;
+}
+
+/* Sort label */
+.sort-label {
+  font-size: var(--font-sm);
+  color: #888;
+  flex-shrink: 0;
+}
+
+/* Chips */
+.chip { --f7-chip-bg-color: #f5f5f5; --f7-chip-text-color: var(--attendance-secondary); }
+.chip-outline { --f7-chip-bg-color: var(--attendance-primary); --f7-chip-text-color: white; }
+.chip-sm { --f7-chip-height: 24px; font-size: 11px; }
+.chip--trained { --f7-chip-bg-color: rgba(76,175,80,0.1); --f7-chip-text-color: var(--attendance-primary); }
+.chip-outline-trained { --f7-chip-bg-color: var(--attendance-primary); --f7-chip-text-color: white; }
+.chip--untrained { --f7-chip-bg-color: rgba(255,87,34,0.1); --f7-chip-text-color: var(--attendance-accent); }
+.chip-outline-untrained { --f7-chip-bg-color: var(--attendance-accent); --f7-chip-text-color: white; }
+
+.mr-2 { margin-right: var(--space-2); }
+.mt-2 { margin-top: var(--space-2); }
+.grid { display: grid; }
+.grid-cols-3 { grid-template-columns: repeat(3, 1fr); }
+.gap-2 { gap: var(--space-2); }
+.gap-3 { gap: var(--space-3); }
+.w-full { width: 100%; }
+.items-center { align-items: center; }
+.flex { display: flex; }
+.flex-wrap { flex-wrap: wrap; }
+
+/* Student card */
 .student-card {
   display: flex;
   align-items: center;
@@ -362,83 +453,105 @@ export default (props, { $f7, $on, $onMounted, $onBeforeUnmount, $update, $store
   background: white;
   border-radius: var(--radius-md);
   margin-bottom: var(--space-2);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.07);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.18s ease;
+  border: 1px solid rgba(0,0,0,0.04);
 }
 
-.student-card:hover {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
-  transform: translateY(-2px);
+.student-card:active {
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+  transform: scale(0.99);
 }
 
 .student-card__photo {
-  width: 64px;
-  height: 64px;
-  border-radius: 50%;
-  object-fit: cover;
-  border: 3px solid var(--attendance-primary);
+  width: 52px; height: 52px; border-radius: 50%;
+  object-fit: cover; border: 2.5px solid var(--attendance-primary);
+  flex-shrink: 0;
 }
 
 .student-card__photo-placeholder {
-  width: 64px;
-  height: 64px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  width: 52px; height: 52px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
   background: linear-gradient(135deg, var(--attendance-primary), var(--attendance-secondary));
-  border: 3px solid var(--attendance-primary);
-  color: white;
-  font-size: 32px;
+  border: 2.5px solid var(--attendance-primary);
+  color: white; font-size: 28px;
+  flex-shrink: 0;
 }
 
-.student-card__info {
-  flex: 1;
-  min-width: 0;
-}
+.student-card__info { flex: 1; min-width: 0; }
 
 .student-card__name {
-  font-size: var(--font-md);
-  font-weight: 600;
-  color: var(--attendance-secondary);
-  margin-bottom: var(--space-1);
+  font-size: var(--font-md); font-weight: 700;
+  color: var(--attendance-secondary); margin-bottom: 2px;
 }
 
 .student-card__details {
-  font-size: var(--font-sm);
-  color: #666;
-  margin-bottom: var(--space-1);
+  font-size: var(--font-sm); color: #777;
+  margin-bottom: var(--space-1); line-height: 1.4;
 }
 
 .student-card__actions {
   display: flex;
-  gap: var(--space-2);
+  gap: 6px;
+  flex-shrink: 0;
 }
 
-.badge-success {
-  background: var(--attendance-success);
-  color: white;
-}
-
-.badge-error {
-  background: var(--attendance-error);
-  color: white;
-}
-
-.badge-info {
-  background: var(--attendance-info);
-  color: white;
-  display: inline-flex;
+.student-card__actions .button {
+  width: 32px !important;
+  height: 32px !important;
+  min-width: 32px !important;
+  padding: 0 !important;
+  border-radius: 8px !important;
+  display: flex;
   align-items: center;
-  gap: 2px;
+  justify-content: center;
 }
 
-.items-center {
-  align-items: center;
+.student-card__actions .material-icons {
+  font-size: 16px;
 }
 
-.flex-wrap {
-  flex-wrap: wrap;
+/* Local badge overrides (visually consistent with global) */
+.badge-success { background: rgba(76,175,80,0.14); color: #2e7d32; border: 1px solid rgba(76,175,80,0.25); }
+.badge-warning { background: rgba(255,193,7,0.14); color: #b8860b; border: 1px solid rgba(255,193,7,0.25); }
+.badge-error   { background: rgba(244,67,54,0.12); color: #c62828; border: 1px solid rgba(244,67,54,0.2); }
+.badge-info    {
+  background: rgba(33,150,243,0.12); color: #1565c0;
+  border: 1px solid rgba(33,150,243,0.2);
+  display: inline-flex; align-items: center; gap: 2px;
+}
+
+/* Responsive: smaller photo on 240-320px screens */
+@media (max-width: 320px) {
+  .student-card {
+    gap: 10px;
+    padding: 10px;
+  }
+
+  .student-card__photo,
+  .student-card__photo-placeholder {
+    width: 42px;
+    height: 42px;
+    font-size: 22px;
+  }
+
+  .student-card__name {
+    font-size: 13px;
+  }
+
+  .student-card__details {
+    font-size: 10px;
+  }
+
+  .student-card__actions .button {
+    width: 28px !important;
+    height: 28px !important;
+    min-width: 28px !important;
+  }
+
+  .student-card__actions .material-icons {
+    font-size: 14px;
+  }
 }
 </style>

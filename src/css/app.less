@@ -225,5 +225,117 @@
 .shadow-md { box-shadow: 0 4px 8px rgba(0, 0, 0, 0.12); }
 .shadow-lg { box-shadow: 0 8px 16px rgba(0, 0, 0, 0.15); }
 
+/* ===== Inline-flex utility ===== */
+.inline-flex { display: inline-flex; }
+
+/* ===== Grid Utilities ===== */
+.grid { display: grid; }
+.grid-cols-2 { grid-template-columns: repeat(2, 1fr); }
+.grid-cols-3 { grid-template-columns: repeat(3, 1fr); }
+.grid-cols-4 { grid-template-columns: repeat(4, 1fr); }
+
+/* ===== Layout helpers ===== */
+.overflow-hidden { overflow: hidden; }
+.overflow-auto   { overflow: auto; }
+.truncate        { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.opacity-50      { opacity: 0.5; }
+.opacity-75      { opacity: 0.75; }
+.z-10  { z-index: 10; }
+.z-100 { z-index: 100; }
+
+/* ===== Page Transition: hide stacked toolbars & navbars on background pages =====
+   F7 keeps .page-previous in the DOM during transition. Without this, both pages'
+   toolbars (and navbars) stack visually, showing duplicates. */
+.page-previous,
+.page-on-left {
+  .toolbar-bottom { display: none !important; }
+  .navbar         { visibility: hidden !important; }
+}
+
+/* ===== Mobile Responsive (240px – 320px) ===== */
+@media (max-width: 320px) {
+  :root {
+    --font-xs:    9px;
+    --font-sm:   11px;
+    --font-base: 13px;
+    --font-md:   15px;
+    --font-lg:   17px;
+    --font-xl:   20px;
+    --font-2xl:  24px;
+    --font-3xl:  30px;
+    --font-4xl:  38px;
+    --font-5xl:  48px;
+
+    --space-1: 6px;
+    --space-2: 10px;
+    --space-3: 13px;
+    --space-4: 16px;
+    --space-5: 20px;
+    --space-6: 24px;
+    --space-7: 30px;
+    --space-8: 38px;
+    --space-9: 48px;
+  }
+
+  /* Condense block padding */
+  .block,
+  .block-strong {
+    margin-left: 10px !important;
+    margin-right: 10px !important;
+    padding-left: 10px !important;
+    padding-right: 10px !important;
+  }
+
+  /* 3-col grids → 2-col on tiny screens */
+  .grid-cols-3 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  /* Navbar title */
+  .navbar .title {
+    font-size: 14px;
+  }
+
+  .navbar-inner {
+    padding: 0 8px;
+  }
+
+  /* Tighter chips */
+  .chip {
+    --f7-chip-height: 26px;
+    font-size: 11px;
+  }
+
+  .flex-wrap {
+    gap: 6px;
+  }
+
+  /* Compact toolbar labels */
+  .tabbar-label {
+    font-size: 9px !important;
+  }
+
+  /* Compact buttons */
+  .button {
+    font-size: 12px;
+    height: 36px;
+  }
+
+  .button.button-large {
+    height: 44px;
+    font-size: 14px;
+  }
+}
+
+/* ===== Mobile Responsive (321px – 375px — standard small phones) ===== */
+@media (min-width: 321px) and (max-width: 375px) {
+  :root {
+    --font-base: 14px;
+    --font-sm:   12px;
+    --font-md:   16px;
+    --font-lg:   19px;
+  }
+}
+
 /* ===== Component Imports ===== */
 @import './framework7-custom.less';

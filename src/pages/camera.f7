@@ -289,10 +289,16 @@ export default (props, { $f7, $on, $onMounted, $onBeforeUnmount, $update, $h }) 
       // Initialize notification service
       await notifications.init();
 
-      // Get current time and date
+      // Get current time and date (local timezone)
       const now = new Date();
-      const time = now.toTimeString().split(' ')[0]; // "HH:MM:SS"
-      const date = now.toISOString().split('T')[0];  // "YYYY-MM-DD"
+      const h = String(now.getHours()).padStart(2, '0');
+      const mi = String(now.getMinutes()).padStart(2, '0');
+      const s = String(now.getSeconds()).padStart(2, '0');
+      const time = `${h}:${mi}:${s}`;
+      const y = now.getFullYear();
+      const mo = String(now.getMonth() + 1).padStart(2, '0');
+      const day = String(now.getDate()).padStart(2, '0');
+      const date = `${y}-${mo}-${day}`;
 
       // Send notification
       const results = await notifications.sendAttendanceNotification({

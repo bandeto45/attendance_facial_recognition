@@ -108,32 +108,43 @@
 
 /* Status Badges */
 .badge {
-  display: inline-block;
-  padding: var(--space-1) var(--space-2);
-  font-size: var(--font-xs);
-  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px 8px;
+  font-size: 10px;
+  font-weight: 700;
   text-transform: uppercase;
-  border-radius: var(--radius-base);
+  letter-spacing: 0.5px;
+  border-radius: 6px;
+  line-height: 1.4;
 }
 
 .badge-success {
-  background: rgba(76, 175, 80, 0.2);
-  color: var(--attendance-success);
+  background: rgba(76, 175, 80, 0.15);
+  color: #2e7d32;
+  border: 1px solid rgba(76, 175, 80, 0.25);
 }
 
 .badge-warning {
-  background: rgba(255, 193, 7, 0.2);
-  color: var(--attendance-warning);
+  background: rgba(255, 193, 7, 0.15);
+  color: #b8860b;
+  border: 1px solid rgba(255, 193, 7, 0.25);
 }
 
 .badge-error {
-  background: rgba(244, 67, 54, 0.2);
-  color: var(--attendance-error);
+  background: rgba(244, 67, 54, 0.12);
+  color: #c62828;
+  border: 1px solid rgba(244, 67, 54, 0.2);
 }
 
 .badge-info {
-  background: rgba(33, 150, 243, 0.2);
-  color: var(--attendance-info);
+  background: rgba(33, 150, 243, 0.12);
+  color: #1565c0;
+  border: 1px solid rgba(33, 150, 243, 0.2);
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
 }
 
 /* Recognition Overlay */
@@ -324,55 +335,56 @@
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
 }
 
-/* Loading Spinner */
+/* Loading Spinner — styles live in LoadingSpinner.f7 <style> block */
+/* Legacy overlay (keep for any direct usages elsewhere) */
 .loading-overlay {
   position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.7);
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0, 0, 0, 0.65);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 10000;
+  backdrop-filter: blur(2px);
 }
 
 .loading-overlay .spinner {
-  width: 48px;
-  height: 48px;
-  border: 4px solid rgba(255, 255, 255, 0.3);
+  width: 44px;
+  height: 44px;
+  border: 4px solid rgba(255, 255, 255, 0.25);
   border-top-color: white;
   border-radius: 50%;
-  animation: spin 1s linear infinite;
+  animation: spin 0.85s linear infinite;
 }
 
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
 
-/* Empty State */
+/* Empty State — base styles (component overrides for enhanced look) */
 .empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
   text-align: center;
-  padding: var(--space-9);
-}
-
-.empty-state__icon {
-  font-size: 64px;
-  color: #ccc;
-  margin-bottom: var(--space-4);
+  padding: var(--space-9) var(--space-5);
+  min-height: 200px;
 }
 
 .empty-state__title {
   font-size: var(--font-xl);
-  font-weight: 600;
+  font-weight: 700;
   color: var(--attendance-secondary);
   margin-bottom: var(--space-2);
+  letter-spacing: -0.3px;
 }
 
 .empty-state__message {
-  font-size: var(--font-base);
-  color: #666;
+  font-size: var(--font-sm);
+  color: #888;
+  line-height: 1.6;
+  max-width: 260px;
 }
 
 /* Bottom Toolbar */
@@ -380,25 +392,30 @@
   z-index: 500;
 }
 
-/* Stat Card */
+/* Stat Card — styles live in StatCard.f7 <style> block */
+/* These are fallback globals */
 .stat-card {
-  background: var(--attendance-bg);
+  background: white;
   border-radius: var(--radius-lg);
-  padding: var(--space-4);
-  box-shadow: var(--card-shadow);
+  padding: 14px 10px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.07);
   text-align: center;
+  border: 1.5px solid rgba(0,0,0,0.04);
 }
 
 .stat-card__value {
-  font-size: var(--font-3xl);
-  font-weight: 700;
+  font-size: 28px;
+  font-weight: 800;
   color: var(--attendance-primary);
 }
 
 .stat-card__label {
-  font-size: var(--font-sm);
-  color: #666;
-  margin-top: var(--space-1);
+  font-size: 11px;
+  font-weight: 600;
+  color: #999;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  margin-top: 3px;
 }
 
 /* Recognition Status */

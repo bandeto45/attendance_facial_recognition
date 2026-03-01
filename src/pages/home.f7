@@ -103,19 +103,16 @@ export default (props, { $f7, $on, $onMounted, $update }) => {
       return;
     }
 
-    // For demo purposes - in production, validate against database
+    // Admin:    admin    / admin    (role follows the radio selector on the form)
+    // Operator: operator / password  (role is always forced to 'operator')
     if (username === 'admin' && password === 'admin') {
-      // Store session
       localStorage.setItem('user', JSON.stringify({ username, role }));
-      
-      // Navigate to recognition page
       $f7.views.main.router.navigate('/recognition/');
-      
-      $f7.toast.create({
-        text: 'Login successful!',
-        position: 'center',
-        closeTimeout: 2000,
-      }).open();
+      $f7.toast.create({ text: 'Login successful!', position: 'center', closeTimeout: 2000 }).open();
+    } else if (username === 'operator' && password === 'password') {
+      localStorage.setItem('user', JSON.stringify({ username, role: 'operator' }));
+      $f7.views.main.router.navigate('/recognition/');
+      $f7.toast.create({ text: 'Login successful!', position: 'center', closeTimeout: 2000 }).open();
     } else {
       $f7.dialog.alert('Invalid username or password', 'Login Error');
     }

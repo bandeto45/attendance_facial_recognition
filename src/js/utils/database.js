@@ -304,21 +304,100 @@ class Database {
   // ========== ATTENDANCE OPERATIONS ==========
 
   /**
-   * Record time-in
-   * Note: Validation for alternating sequence is done in camera.f7
-   * This function allows multiple time-ins per day as long as previous time-out exists
+   * Get current local date as YYYY-MM-DD string
+   * Uses local time zone to prevent date bleeding across midnight UTC
+   */
+  getLocalDate() {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+
+  /**
+   * Get current local time as HH:MM:SS string
+   */
+  getLocalTime() {
+    const now = new Date();
+    const h = String(now.getHours()).padStart(2, '0');
+    const m = String(now.getMinutes()).padStart(2, '0');
+    const s = String(now.getSeconds()).padStart(2, '0');
+    return `${h}:${m}:${s}`;
+  }
+
+  // ========== SCHEDULE SETTINGS ==========
+
+  /**
+   * Get schedule settings used to determine late / early status on first time-in.
+   * Defaults: timeIn = '08:00' (on-time from), lateAfter = '08:30' (late threshold)
+   */
+  async getScheduleSettings() {
+    const timeIn    = (await this.getSetting('schedule_time_in'))    || '08:00';
+    const lateAfter = (await this.getSetting('schedule_late_after')) || '08:30';
+    return { timeIn, lateAfter };
+  }
+
+  /**
+   * Return all active students who have NO attendance record for the given date (absent).
+   */
+  async getAbsentStudents(date) {
+    return this.query(`
+      SELECT s.id, s.student_id, s.first_name, s.last_name, s.course, s.year_level
+      FROM students s
+      WHERE s.status = 'active'
+        AND s.id NOT IN (
+          SELECT DISTINCT a.student_id FROM attendance a WHERE a.attendance_date = ?
+        )
+      ORDER BY s.last_name, s.first_name
+    `, [date]);
+  }
+
+  /**
+   * Record time-in.
+   *
+   * Status rules (FIRST time-in of the day only):
+   *   'early'   – arrived before the scheduled time-in start
+   *   'present' – arrived within the on-time window
+   *   'late'    – arrived after the late-after threshold
+   *
+   * All subsequent time-ins on the same day get status = 'present'.
    */
   async recordTimeIn(studentId, confidence, photoPath = null) {
-    const date = new Date().toISOString().split('T')[0];
-    const time = new Date().toTimeString().split(' ')[0];
-    
-    // No validation here - validation is done in camera.f7 before calling this
-    // This allows unlimited time-in/time-out cycles per day
-    
-    const sql = `INSERT INTO attendance (student_id, attendance_date, time_in, status, confidence, photo_path) 
-                 VALUES (?, ?, ?, 'present', ?, ?)`;
-    await this.query(sql, [studentId, date, time, confidence, photoPath]);
-    return { success: true, message: 'Time-in recorded' };
+    const date = this.getLocalDate();
+    const time = this.getLocalTime();
+
+    // Is this the first time-in today for this student?
+    const existing = await this.query(
+      `SELECT id FROM attendance WHERE student_id = ? AND attendance_date = ? ORDER BY id ASC LIMIT 1`,
+      [studentId, date]
+    );
+
+    let status = 'present';
+    if (existing.length === 0) {
+      // ── First time-in today: evaluate against the schedule ───────────────
+      try {
+        const schedule = await this.getScheduleSettings();
+        const [cH, cM] = time.split(':').map(Number);
+        const [iH, iM] = schedule.timeIn.split(':').map(Number);
+        const [lH, lM] = schedule.lateAfter.split(':').map(Number);
+        const current  = cH * 60 + cM;
+        const onTime   = iH * 60 + iM;
+        const lateAt   = lH * 60 + lM;
+        if      (current < onTime)  status = 'early';
+        else if (current > lateAt)  status = 'late';
+        else                        status = 'present';
+        console.log(`📋 First time-in: ${time} → ${status} (schedule: on-time ${schedule.timeIn}, late after ${schedule.lateAfter})`);
+      } catch (e) {
+        console.warn('Schedule check failed, defaulting to present:', e);
+        status = 'present';
+      }
+    }
+
+    const sql = `INSERT INTO attendance (student_id, attendance_date, time_in, status, confidence, photo_path)
+                 VALUES (?, ?, ?, ?, ?, ?)`;
+    await this.query(sql, [studentId, date, time, status, confidence, photoPath]);
+    return { success: true, message: 'Time-in recorded', status };
   }
 
   /**
@@ -326,8 +405,8 @@ class Database {
    * Updates the MOST RECENT attendance record for the student that has time_in but no time_out
    */
   async recordTimeOut(studentId, confidence, photoPath = null) {
-    const date = new Date().toISOString().split('T')[0];
-    const time = new Date().toTimeString().split(' ')[0];
+    const date = this.getLocalDate();
+    const time = this.getLocalTime();
     
     // Update only the most recent record (highest ID) that has time_in without time_out
     const sql = `UPDATE attendance 
@@ -345,7 +424,7 @@ class Database {
    * Get today's attendance
    */
   async getTodayAttendance() {
-    const date = new Date().toISOString().split('T')[0];
+    const date = this.getLocalDate();
     return this.query(`
       SELECT 
         a.id,
@@ -372,7 +451,7 @@ class Database {
    * Get today's record for a student (latest)
    */
   async getTodayRecordForStudent(studentId) {
-    const date = new Date().toISOString().split('T')[0];
+    const date = this.getLocalDate();
     const rows = await this.query(
       `SELECT * FROM attendance WHERE student_id = ? AND attendance_date = ? ORDER BY id DESC LIMIT 1`,
       [studentId, date]
